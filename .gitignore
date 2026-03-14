@@ -1,0 +1,12 @@
+# input files
+data/
+
+# nextflow workdir
+work/
+
+# output files
+results/
+
+# nextflow thing
+.nextflow/
+.nextflow*
