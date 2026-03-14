@@ -81,12 +81,11 @@ EOF
         exit 0
     fi
 
-    name=\$(basename ${ligand} .pdbqt)
-    id=\$(echo "${ligand}\${EPOCHSECONDS}" | md5sum | cut -d' ' -f1)
+    name=\$(grep "Name" ${ligand}| awk '{print \$4}' | head -1)
     vina --config config.txt \\
          --ligand ${ligand} \\
          --receptor ${receptor} \\
-         --out \${id}.pdbqt \\
+         --out zinc_\${name}.pdbqt \\
          --cpu ${task.cpus}
     """
 }

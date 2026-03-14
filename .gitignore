@@ -1,5 +1,5 @@
 # input files
-data/
+# data/
 
 # nextflow workdir
 work/
