@@ -57,7 +57,7 @@ process DOCKING {
     path receptor
 
     output:
-    path "*_results/*.out.pdbqt"
+    path "*.pdbqt"
 
     script:
     """
@@ -82,12 +82,11 @@ EOF
     fi
 
     name=\$(basename ${ligand} .pdbqt)
-    id=\$(echo "${ligand}" | md5sum | cut -d' ' -f1)
-    mkdir -p \${name}_results
+    id=\$(echo "${ligand}\${EPOCHSECONDS}" | md5sum | cut -d' ' -f1)
     vina --config config.txt \\
          --ligand ${ligand} \\
          --receptor ${receptor} \\
-         --out "\${name}_results/\${id}.pdbqt" \\
+         --out \${id}.pdbqt \\
          --cpu ${task.cpus}
     """
 }
