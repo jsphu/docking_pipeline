@@ -2,4 +2,4 @@
 Run `nextflow run main.nf` to start pipeline.
 
 ### flowchart
-[flowchart](./flowchart.png)
+![flowchart](./flowchart.png)
