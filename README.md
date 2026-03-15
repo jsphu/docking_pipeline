@@ -18,6 +18,7 @@ This pipeline executes locally so, you should have;
 
 - UNIX/POSIX/LINUX OS (WSL on windows)
 - gz, gunzip, split, curl (etc.)
+- nextflow
 - obabel (2D MODE)
 - vina_split (3D MODE)
 - vina
