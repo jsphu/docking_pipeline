@@ -17,7 +17,7 @@ params {
 This pipeline executes locally so, you should have;
 
 - UNIX/POSIX/LINUX OS (WSL on windows)
-- gz, gunzip, split, curl (etc.)
+- gz, gunzip, split, curl, awk (etc.)
 - nextflow
 - obabel (2D MODE)
 - vina_split (3D MODE)
