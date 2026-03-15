@@ -50,14 +50,15 @@ process DOWNLOAD_PDBQT_AND_SPLIT {
     val link
 
     output:
-    path "lig_*.pdbqt", optional: true
+    path "ligands/*.pdbqt", optional: true
 
     script:
     """
+    mkdir -p ligands
     id=\$(echo "${link}" | md5sum | cut -d' ' -f1)
     curl -sL --retry 5 "${link}" --output "\${id}.pdbqt.gz"
     [ -s "\${id}.pdbqt.gz" ] && gunzip "\${id}.pdbqt.gz"
-    [ -s "\${id}.pdbqt" ] && vina_split --input "\${id}.pdbqt" --ligand lig_
+    [ -s "\${id}.pdbqt" ] && vina_split --input "\${id}.pdbqt" --ligand ligands/lig_
     """
 }
 
