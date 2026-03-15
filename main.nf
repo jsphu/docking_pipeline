@@ -1,12 +1,30 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-params.links_file = 'data/ZINC-downloader-2D-txt.uri'
-params.receptor = 'data/hif2a_temiz.pdbqt'
 params.outdir = 'results'
+params.links_file = 'data/ZINC-downloader-2D-txt.uri'
+
+// --- 2D (SMILES) options ---
 params.chunk_size = 200
 
-process DOWNLOAD_AND_CHUNK {
+// --- 3D (PDBQT) options ---
+params.use3d_downloader = false
+
+// Docking Options
+params.receptor = 'data/hif2a_temiz.pdbqt'
+params.override = false // overwrites if same file docked before otherwise skips.
+params.exhaustiveness = 8
+params.center_x = -13.02726936340332
+params.center_y = -22.765233993530273
+params.center_z = 21.719926834106445
+params.size_x = 20.0
+params.size_y = 20.0
+params.size_z = 20.0
+params.num_modes = 9
+params.energy_range = 3.0
+
+
+process DOWNLOAD_SMILES_AND_CHUNK {
     errorStrategy 'retry'
     maxRetries 5
 
@@ -24,7 +42,26 @@ process DOWNLOAD_AND_CHUNK {
     """
 }
 
-process CONVERT_SMILES {
+process DOWNLOAD_PDBQT_AND_SPLIT {
+    errorStrategy 'retry'
+    maxRetries 5
+
+    input:
+    val link
+
+    output:
+    path "lig_*.pdbqt", optional: true
+
+    script:
+    """
+    id=\$(echo "${link}" | md5sum | cut -d' ' -f1)
+    curl -sL --retry 5 "${link}" --output "\${id}.pdbqt.gz"
+    [ -s "\${id}.pdbqt.gz" ] && gunzip "\${id}.pdbqt.gz"
+    [ -s "\${id}.pdbqt" ] && vina_split --input "\${id}.pdbqt" --ligand lig_
+    """
+}
+
+process OBABEL_CONVERT_SMILES {
     cpus 1
     containerOptions "--env OMP_NUM_THREADS=1"
 
@@ -38,13 +75,7 @@ process CONVERT_SMILES {
     """
     mkdir -p ligands
     # -m generates lig_1.pdbqt, lig_2.pdbqt, etc.
-    obabel -ismi ${chunk} -opdbqt -O ligands/lig_.pdbqt -m --gen3d -p 7.4 || true
-
-    for f in ligands/*.pdbqt; do
-        if grep -qE "0\\.000\\s+0\\.000\\s+0\\.000" \$f; then
-            rm -f \$f
-        fi
-    done
+    obabel -ismi ${chunk} -opdbqt -O ligands/lig_.pdbqt -m --gen3d -p 7.4
     """
 }
 
@@ -63,30 +94,41 @@ process DOCKING {
     """
     cat > config.txt <<EOF
 # Grid Box
-center_x = -13.02726936340332
-center_y = -22.765233993530273
-center_z = 21.719926834106445
-size_x = 20.0
-size_y = 20.0
-size_z = 20.0
+center_x = ${params.center_x}
+center_y = ${params.center_y}
+center_z = ${params.center_z}
+size_x = ${params.size_x}
+size_y = ${params.size_y}
+size_z = ${params.size_z}
 
 # PARAMETERS
-exhaustiveness = 8
-num_modes = 9
-energy_range = 3.0
+exhaustiveness = ${params.exhaustiveness}
+num_modes = ${params.num_modes}
+energy_range = ${params.energy_range}
 EOF
     x_coords=\$(grep "^ATOM" ${ligand} | awk '{print \$6}' | sort -u)
+    name=\$(grep "Name" ${ligand}| awk '{print \$4}' | head -1)
+    results_path="${workflow.launchDir}/results"
+    old_file="\${results_path}/result_\${name}.pdbqt"
+    empty_file="\${results_path}/empty_\${name}.pdbqt"
     if [ "\$x_coords" == "0.000" ]; then
         echo "WARNING: '${ligand}' is a bad ligand, skipped."
-        exit 0
-    fi
+        ln -s "${ligand}" "empty_\${name}.pdbqt"
+    elif [ -f "\${old_file}" ] && ! ${params.override}; then
+        echo "NOTE: Old file not overridden, skipped."
+        ln -s "\${old_file}" "result_\${name}.pdbqt"
+    else
+        if [ -f "\${empty_file}" ]; then
+            echo "NOTE: Empty docking result will be replaced."
+            rm -f "\${empty_file}"
+        fi
 
-    name=\$(grep "Name" ${ligand}| awk '{print \$4}' | head -1)
-    vina --config config.txt \\
-         --ligand ${ligand} \\
-         --receptor ${receptor} \\
-         --out zinc_\${name}.pdbqt \\
-         --cpu ${task.cpus}
+        vina --config config.txt \\
+            --ligand ${ligand} \\
+            --receptor ${receptor} \\
+            --out result_\${name}.pdbqt \\
+            --cpu ${task.cpus}
+    fi
     """
 }
 
@@ -98,12 +140,16 @@ workflow {
         .map{ it.trim() }
         .filter{ it != "" }
 
-    // First flatten: Chunk level
-    chunks_ch = DOWNLOAD_AND_CHUNK(links_ch).flatten()
-
-    // Second flatten: Ligand level
-    // This ensures DOCKING starts as soon as the first PDBQT of a chunk is written
-    ligands_ch = CONVERT_SMILES(chunks_ch).flatten()
+    if (params.use3d_downloader) {
+        ligands_ch = DOWNLOAD_PDBQT_AND_SPLIT(links_ch)
+            .flatten()
+    } else {
+        chunks_ch = DOWNLOAD_SMILES_AND_CHUNK(links_ch)
+            .flatten()
+        // This ensures DOCKING starts as soon as the first PDBQT of a chunk is written
+        ligands_ch = OBABEL_CONVERT_SMILES(chunks_ch)
+            .flatten()
+    }
 
     DOCKING(ligands_ch, receptor_file)
 }
