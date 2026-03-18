@@ -3,7 +3,7 @@ Run `nextflow run main.nf` to start pipeline.
 
 ### Configurations
 Change configurations on `nextflow.config`
-```groovy
+```nextflow
 params {
     links_file          // (string) main downloader file
     outdir              // (string) results directory
@@ -14,7 +14,7 @@ params {
 ```
 
 ### Dependencies
-This pipeline executes locally so, you should have;
+If you want to execute this pipeline locally, you should have;
 
 - UNIX/POSIX/LINUX OS (WSL on windows)
 - gz, gunzip, split, curl, awk (etc.)
@@ -23,7 +23,4 @@ This pipeline executes locally so, you should have;
 - vina_split (3D MODE)
 - vina
 
-### flowchart 2D MODE
-![flowchart_2D](./flowchart_2D.png)
-### flowchart 3D MODE
-![flowchart_3D](./flowchart_3D.png)
+![flowchart](./Dag.png)
