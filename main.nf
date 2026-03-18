@@ -10,6 +10,11 @@ params.chunk_size = 200
 // --- 3D (PDBQT) options ---
 params.use3d_downloader = false
 
+// Downloader Option
+params.skip_download = false
+params.smiles_file = ''
+params.pdbqt_file = ''
+
 // Docking Options
 params.receptor = 'data/hif2a_temiz.pdbqt'
 params.override = false // overwrites if same file docked before otherwise skips.
@@ -42,7 +47,7 @@ process DOWNLOAD_SMILES_AND_CHUNK {
     """
 }
 
-process DOWNLOAD_PDBQT_AND_SPLIT {
+process DOWNLOAD_PDBQT_AND_UNZIP {
     errorStrategy 'retry'
     maxRetries 5
 
@@ -50,7 +55,7 @@ process DOWNLOAD_PDBQT_AND_SPLIT {
     val link
 
     output:
-    path "ligands/*.pdbqt", optional: true
+    path "*.pdbqt", optional: true
 
     script:
     """
@@ -58,7 +63,19 @@ process DOWNLOAD_PDBQT_AND_SPLIT {
     id=\$(echo "${link}" | md5sum | cut -d' ' -f1)
     curl -sL --retry 5 "${link}" --output "\${id}.pdbqt.gz"
     [ -s "\${id}.pdbqt.gz" ] && gunzip "\${id}.pdbqt.gz"
-    [ -s "\${id}.pdbqt" ] && vina_split --input "\${id}.pdbqt" --ligand ligands/lig_
+    """
+}
+
+process SPLIT_PDBQT {
+    input:
+    path pdbqt
+
+    output:
+    path "ligands/*.pdbqt"
+
+    script:
+    """
+    vina_split --input "${pdbqt}" --ligand ligands/lig_
     """
 }
 
@@ -136,20 +153,41 @@ EOF
 workflow {
     receptor_file = file(params.receptor)
 
-    links_ch = Channel.fromPath(params.links_file)
-        .splitText()
-        .map{ it.trim() }
-        .filter{ it != "" }
+    if (params.skip_download) {
+        if (params.smiles_file) {
+            smiles_file = file(params.smiles_file)
 
-    if (params.use3d_downloader) {
-        ligands_ch = DOWNLOAD_PDBQT_AND_SPLIT(links_ch)
-            .flatten()
+            ligands_ch = OBABEL_CONVERT_SMILES(smiles_file)
+                .flatten()
+        } else if (params.pdbqt_file) {
+            pdbqt_file = file(params.pdbqt_file)
+
+            ligands_ch = SPLIT_PDBQT(pdbqt_ch)
+                .flatten()
+        } else {
+            error("Please give any input files, smiles_file? or pdbqt_file?")
+        }
+
     } else {
-        chunks_ch = DOWNLOAD_SMILES_AND_CHUNK(links_ch)
-            .flatten()
-        // This ensures DOCKING starts as soon as the first PDBQT of a chunk is written
-        ligands_ch = OBABEL_CONVERT_SMILES(chunks_ch)
-            .flatten()
+        links_ch = Channel.fromPath(params.links_file)
+            .splitText()
+            .map{ it.trim() }
+            .filter{ it != "" }
+
+        if (params.use3d_downloader) {
+            pdbqt_ch = DOWNLOAD_PDBQT_AND_UNZIP(links_ch)
+                .flatten()
+
+            ligands_ch = SPLIT_PDBQT(pdbqt_ch)
+                .flatten()
+
+        } else {
+            chunks_ch = DOWNLOAD_SMILES_AND_CHUNK(links_ch)
+                .flatten()
+            // This ensures DOCKING starts as soon as the first PDBQT of a chunk is written
+            ligands_ch = OBABEL_CONVERT_SMILES(chunks_ch)
+                .flatten()
+        }
     }
 
     DOCKING(ligands_ch, receptor_file)
