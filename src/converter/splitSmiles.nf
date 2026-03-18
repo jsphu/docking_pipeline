@@ -1,6 +1,6 @@
 
 process SPLIT_SMILES {
-    container 'ubuntu:20.04'
+    container 'custom-linux:latest'
     input:
     path raw_file
 

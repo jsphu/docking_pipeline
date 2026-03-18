@@ -1,12 +1,11 @@
 process DOCKING {
     container 'quay.io/biocontainers/autodock-vina:1.1.2--2'
-    publishDir "${outdir}", mode: 'copy'
+    publishDir "${params.outdir}", mode: 'copy'
     cpus 1 // Since we are running per-ligand, 1 CPU per task is most efficient
 
     input:
     path ligand
     path receptor
-    path outdir
     val config
     val override
 

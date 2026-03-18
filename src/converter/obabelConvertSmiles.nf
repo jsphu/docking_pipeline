@@ -14,6 +14,6 @@ process OBABEL_CONVERT_SMILES {
     """
     mkdir -p ligands
     # -m generates lig_1.pdbqt, lig_2.pdbqt, etc.
-    obabel -ismi ${smi} -opdbqt -O ligands/lig_.pdbqt -m --gen3d -p 7.4
+    obabel -ismi ${smi} -opdbqt -O ligands/lig_.pdbqt -m -p 7.4 --gen3d fastest
     """
 }

@@ -10,6 +10,7 @@ process SPLIT_PDBQT {
 
     script:
     """
+    mkdir -p ligands
     vina_split --input "${pdbqt}" --ligand ligands/lig_
     """
 }

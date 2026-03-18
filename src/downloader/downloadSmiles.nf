@@ -1,5 +1,5 @@
 process DOWNLOAD_SMILES {
-    container 'ubuntu:20.04'
+    container 'custom-linux:latest'
     errorStrategy 'retry'
     maxRetries 5
 

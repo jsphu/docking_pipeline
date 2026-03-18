@@ -36,7 +36,6 @@ workflow {
     DOCKING(
         ligands_ch,
         receptor_file,
-        params.outdir,
         docking_config,
         params.override
     )

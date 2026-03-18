@@ -1,6 +1,6 @@
 
 process DOWNLOAD_PDBQT_AND_UNZIP {
-    container 'ubuntu:20.04'
+    container 'custom-linux:latest'
     errorStrategy 'retry'
     maxRetries 5
 
@@ -12,7 +12,6 @@ process DOWNLOAD_PDBQT_AND_UNZIP {
 
     script:
     """
-    mkdir -p ligands
     id=\$(echo "${link}" | md5sum | cut -d' ' -f1)
     curl -sL --retry 5 "${link}" --output "\${id}.pdbqt.gz"
     [ -s "\${id}.pdbqt.gz" ] && gunzip "\${id}.pdbqt.gz"
