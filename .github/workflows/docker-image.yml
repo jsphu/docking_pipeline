@@ -7,16 +7,31 @@ on:
     branches: [ "main" ]
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build the Downloader Docker image
-      run: docker build . --file "downloader.Dockerfile" --tag custom-linux:latest
-    - name: Build the Autodock GPU Docker image
-      run: docker build . --file "autodock-gpu.dockerfile" --tag autodock-gpu:latest 
-    - name: Build the QuickVina GPU Docker image
-      run: docker build . --file "Dockerfile" --tag quickvina-gpu:latest
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Autodock GPU
+        run: |
+          docker build . --file "autodock-gpu.dockerfile" --tag autodock-gpu:latest
+
+      - name: Build & Push Downloader
+        run: |
+          docker build . --file "downloader.Dockerfile" --tag ghcr.io/${{ github.repository }}/downloader:latest
+          docker push ghcr.io/${{ github.repository }}/downloader:latest
+
+      - name: Build & Push QuickVina GPU
+        run: |
+          docker build . --file "Dockerfile" --tag ghcr.io/${{ github.repository }}/quickvina-gpu:latest
+          docker push ghcr.io/${{ github.repository }}/quickvina-gpu:latest
