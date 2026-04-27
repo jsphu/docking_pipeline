@@ -1,0 +1,65 @@
+FROM nvidia/cuda:12.2.0-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    git build-essential libboost-all-dev \
+    opencl-headers ocl-icd-opencl-dev clinfo \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+RUN git clone https://github.com/DeltaGroupNJUPT/Vina-GPU-2.1.git
+
+WORKDIR /opt/Vina-GPU-2.1/AutoDock-Vina-GPU-2.1
+
+RUN sed -i 's|^BOOST_LIB_PATH=.*|BOOST_LIB_PATH=/usr/include|' Makefile && \
+    sed -i 's|^VINA_GPU_INC_PATH=.*|VINA_GPU_INC_PATH=-I./lib -I./OpenCL/inc|' Makefile && \
+    sed -i 's|^LIB_PATH=.*|LIB_PATH=-L/usr/lib/x86_64-linux-gnu -L/usr/local/cuda/lib64|' Makefile && \
+    sed -i 's|$(BOOST_LIB_PATH)/libs/thread/src/pthread/thread.cpp||' Makefile && \
+    sed -i 's|$(BOOST_LIB_PATH)/libs/thread/src/pthread/once.cpp||' Makefile && \
+    sed -i 's|LIB1=.*|LIB1=-lboost_program_options -lboost_system -lboost_filesystem -lboost_thread -lOpenCL -no-pie|' Makefile && \
+    sed -i 's|GPU_PLATFORM=-DAMD_PLATFORM|GPU_PLATFORM=-DNVIDIA_PLATFORM|' Makefile && \
+    sed -i 's|-DLARGE_BOX|-DSMALL_BOX|' Makefile && \
+    sed -i 's|MACRO=.*|MACRO=$(OPENCL_VERSION) $(GPU_PLATFORM) $(DOCKING_BOX_SIZE) -DBOOST_TIMER_ENABLE_DEPRECATED -DCL_TARGET_OPENCL_VERSION=200 -fPIC|' Makefile
+
+RUN make source -j "$(nproc)"
+
+RUN cp AutoDock-Vina-GPU-2-1 /usr/local/bin/ && \
+    cp -r OpenCL /usr/local/bin/
+
+# ── Minimal test PDBQT files for kernel warm-up ─────────────────────────────
+# These are the smallest valid PDBQT structures that satisfy Vina's parser.
+# Receptor: alanine dipeptide-like stub
+RUN mkdir -p /opt/vina-warmup/ligands && \
+    cat > /opt/vina-warmup/receptor.pdbqt << 'EOF'
+ATOM      1  N   ALA A   1       1.000   1.000   1.000  1.00  0.00     0.010 N
+ATOM      2  CA  ALA A   1       2.000   1.000   1.000  1.00  0.00     0.027 C
+ATOM      3  C   ALA A   1       2.500   2.000   1.000  1.00  0.00     0.021 C
+ATOM      4  O   ALA A   1       2.000   3.100   1.000  1.00  0.00    -0.271 OA
+ATOM      5  CB  ALA A   1       2.500   0.000   0.000  1.00  0.00     0.031 C
+TER
+END
+EOF
+
+# Ligand: ethanol as PDBQT
+RUN cat > /opt/vina-warmup/ligands/ethanol.pdbqt << 'EOF'
+REMARK  Name = ethanol
+REMARK                            x       y       z     vdW  Elec       q    Type
+REMARK                         _______ _______ _______ _____ _____    ______ ____
+ROOT
+ATOM      1  C1  LIG     1       1.000   1.000   1.000  0.00  0.00    +0.000 C
+ATOM      2  C2  LIG     1       2.500   1.000   1.000  0.00  0.00    +0.000 C
+ATOM      3  O1  LIG     1       3.000   2.200   1.000  0.00  0.00    -0.000 OA
+ATOM      4  H1  LIG     1       3.800   2.200   1.000  0.00  0.00    +0.000 HD
+ENDROOT
+TORSDOF 0
+END
+EOF
+
+# ── Runtime kernel compiler ──────────────────────────────────────────────────
+COPY compile_kernels2.sh /usr/local/bin/compile_kernels2.sh
+RUN chmod +x /usr/local/bin/compile_kernels2.sh
+
+WORKDIR /data
+CMD ["AutoDock-Vina-GPU-2-1"]

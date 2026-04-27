@@ -6,6 +6,7 @@ work/
 
 # output files
 results/
+results-*
 
 # nextflow thing
 .nextflow/

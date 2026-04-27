@@ -39,6 +39,11 @@ EOF
     x_coords=\$(grep "^ATOM" ${ligand} | awk '{print \$6}' | sort -u)
 
     name=\$(grep "Name" ${ligand}| awk '{print \$4}' | head -1)
+
+    if [ -z "\${name}" ]; then
+        # name shouldnt be empty
+        name="UNK_${UUID.randomUUID()}"
+    fi
     
     results_path="${workflow.launchDir}/results"
     old_file="\${results_path}/result_\${name}.pdbqt"
