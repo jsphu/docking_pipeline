@@ -38,8 +38,8 @@ workflow {
     } 
     if (params.use_gpu) {
         ligands_ch
-            .collect()
-            // .collate( params.collate_size )
+            // .collect()
+            .collate( params.collate_size )
             .map { batch -> 
                 // Create a single unique directory in the work dir for this run
                 def batch_dir = file("${workflow.workDir}/gpu_docking_job")

@@ -6,8 +6,11 @@ work/
 
 # output files
 results/
-results-*
+results*
 
 # nextflow thing
 .nextflow/
 .nextflow*
+
+data/
+.trash/

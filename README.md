@@ -1,26 +1,26 @@
 ## Docking pipeline
+
 Run `nextflow run main.nf` to start pipeline.
 
 ### Configurations
-Change configurations on `nextflow.config`
-```nextflow
-params {
-    links_file          // (string) main downloader file
-    outdir              // (string) results directory
-    use3d_downloader    // (boolean) download mode
-    receptor            // (string) receptor file
-    // ...
-}
+
+Use or create new configurations on `config/`
+
+```sh
+config/5TBM-GPU-ACCELERATED.config <= Using quickvina-gpu
+config/5TBM.config <= Using vina
+...
 ```
 
-### Dependencies
-If you want to execute this pipeline locally, you should have;
+### Packages
 
-- UNIX/POSIX/LINUX OS (WSL on windows)
-- gz, gunzip, split, curl, awk (etc.)
-- nextflow
-- obabel (2D MODE)
-- vina_split (3D MODE)
-- vina
+If you want to execute this pipeline, i suggest you to use container images;
 
-![flowchart](./Dag.png)
+```bash
+# QuickVina-GPU, access with QuickVina-W-GPU-2-1 on commandline
+docker pull ghcr.io/jsphu/docking_pipeline/quickvina-gpu:latest
+# Downloader used for downloading from links
+docker pull ghcr.io/jsphu/docking_pipeline/downloader:latest
+```
+
+![flowchart](assets/Dag.png)
