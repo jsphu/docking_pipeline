@@ -14,5 +14,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag custom-linux:$(date +%s)
+    - name: Build the Downloader Docker image
+      run: docker build . --file "downloader.Dockerfile" --tag custom-linux:latest
+    - name: Build the Autodock GPU Docker image
+      run: docker build . --file "autodock-gpu.dockerfile" --tag autodock-gpu:latest 
+    - name: Build the QuickVina GPU Docker image
+      run: docker build . --file "Dockerfile" --tag quickvina-gpu:latest
