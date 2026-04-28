@@ -1,10 +1,10 @@
 process DOCKING_GPU {
-    container 'quickvina-gpu:latest'
-    containerOptions '--gpus all --env NVIDIA_DRIVER_CAPABILITIES=compute,utility --shm-size=2g'
+    container 'ghcr.io/jsphu/docking_pipeline/quickvina-gpu:latest'
+    containerOptions '--gpus all --env NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics --shm-size=4g'
     publishDir "${params.outdir}", mode: 'copy'
 
     input:
-    path ligand_dir
+    path "ligands/*"
     path receptor
     val config
 
@@ -18,8 +18,8 @@ process DOCKING_GPU {
     mkdir -p results
     #
     # Clean up ligands before running
-    find gpu_docking_job -type f -size 0 -delete
-    find gpu_docking_job -name "* *" -type f | rename 's/ /_/g' || true
+    #find gpu_docking_job -type f -size 0 -delete
+    #find gpu_docking_job -name "* *" -type f | rename 's/ /_/g' || true
 
     # ── OpenCL ICD Setup ──────────────────────────────────────────────────────
     mkdir -p /etc/OpenCL/vendors
@@ -39,7 +39,7 @@ process DOCKING_GPU {
     # ── Docking ──────────────────────────────────────────────────────────────
     QuickVina-W-GPU-2-1 \\
         --receptor ${receptor} \\
-        --ligand_directory ${ligand_dir} \\
+        --ligand_directory ligands/ \\
         --output_directory results/ \\
         --thread ${config.thread_size} \\
         --search_depth ${config.exhaustiveness} \\

@@ -38,18 +38,18 @@ workflow {
     } 
     if (params.use_gpu) {
         ligands_ch
-            // .collect()
+            //.collect()
             .collate( params.collate_size )
-            .map { batch -> 
-                // Create a single unique directory in the work dir for this run
-                def batch_dir = file("${workflow.workDir}/gpu_docking_job")
-                batch_dir.mkdirs()
-                batch.each { f -> 
-                    def target = batch_dir.resolve(f.name)
-                    if (!target.exists()) f.copyTo(target) 
-                }
-                return batch_dir
-            }
+            //.map { batch -> 
+                //// Create a single unique directory in the work dir for this run
+                //def batch_dir = file("${workflow.workDir}/gpu_docking_job")
+                //batch_dir.mkdirs()
+                //batch.each { f -> 
+                    //def target = batch_dir.resolve(f.name)
+                    //if (!target.exists()) f.copyTo(target) 
+                //}
+                //return batch_dir
+            //}
             .set { gpu_batches_ch }
 
         DOCKING_GPU(

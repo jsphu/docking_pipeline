@@ -8,7 +8,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
 
 # Added csh to the dependencies
 RUN apt-get update && apt-get install -y \
-  git build-essential libboost-all-dev \
+  git build-essential libboost-all-dev rename \
   opencl-headers ocl-icd-opencl-dev clinfo ocl-icd-libopencl1 \
   && rm -rf /var/lib/apt/lists/*
 
