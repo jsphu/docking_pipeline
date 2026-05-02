@@ -25,31 +25,26 @@ workflow {
     if (params.one_pdbqt) {
         ligands_ch = main_ch
             | flatten
+            | map { f -> [f.baseName.replaceAll('_', '-').toUpperCase(), f] }
     } else if (params.use3d_downloader || params.pdbqt_file) {
         ligands_ch = main_ch
+            | map { f -> [ f.baseName.replaceAll('_', '-').toUpperCase(), f ] }
             | SPLIT_PDBQT 
-            | flatten
+            | transpose
     } else {
         ligands_ch = main_ch
             | SPLIT_SMILES 
             | flatten 
             | OBABEL_CONVERT_SMILES 
             | flatten
+            | map { f -> [f.baseName.replaceAll('_', '-').toUpperCase(), f] }
     } 
     if (params.use_gpu) {
         ligands_ch
-            //.collect()
-            .collate( params.collate_size )
-            //.map { batch -> 
-                //// Create a single unique directory in the work dir for this run
-                //def batch_dir = file("${workflow.workDir}/gpu_docking_job")
-                //batch_dir.mkdirs()
-                //batch.each { f -> 
-                    //def target = batch_dir.resolve(f.name)
-                    //if (!target.exists()) f.copyTo(target) 
-                //}
-                //return batch_dir
-            //}
+            .groupTuple()
+            .flatMap { dir_name, ligands -> 
+                ligands.collate(params.collate_size).collect { batch -> [dir_name, batch] }
+            }
             .set { gpu_batches_ch }
 
         DOCKING_GPU(
