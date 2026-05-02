@@ -1,10 +1,10 @@
 process DOCKING {
     container 'quay.io/biocontainers/autodock-vina:1.1.2--2'
-    publishDir "${params.outdir}", mode: 'copy'
+    publishDir "${params.outdir}/${dir_name}", mode: 'copy'
     cpus 1 // Since we are running per-ligand, 1 CPU per task is most efficient
 
     input:
-    path ligand
+    tuple val(dir_name), path(ligand)
     path receptor
     val config
     val override
@@ -13,6 +13,7 @@ process DOCKING {
     path "*.pdbqt"
 
     script:
+    def results_dir = file("${params.outdir}/${dir_name}").toAbsolutePath()
     """
     cat > config.txt <<EOF
 # ligand
@@ -45,7 +46,7 @@ EOF
         name="UNK_${UUID.randomUUID()}"
     fi
     
-    results_path="${workflow.launchDir}/results"
+    results_path="${results_dir}"
     old_file="\${results_path}/result_\${name}.pdbqt"
     empty_file="\${results_path}/empty_\${name}.pdbqt"
     

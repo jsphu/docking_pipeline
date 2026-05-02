@@ -3,10 +3,10 @@ process SPLIT_PDBQT {
     container 'quay.io/biocontainers/autodock-vina:1.1.2--2'
 
     input:
-    path pdbqt
+    tuple val(dir_name), path(pdbqt)
 
     output:
-    path "ligands/*.pdbqt"
+    tuple val(dir_name), path("ligands/*.pdbqt")
 
     script:
     """

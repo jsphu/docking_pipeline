@@ -1,10 +1,10 @@
 process DOCKING_GPU {
     container 'ghcr.io/jsphu/docking_pipeline/quickvina-gpu:latest'
     containerOptions '--gpus all --env NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics --shm-size=4g'
-    publishDir "${params.outdir}", mode: 'copy'
+    publishDir "${params.outdir}/${dir_name}", mode: 'copy'
 
     input:
-    path "ligands/*"
+    tuple val(dir_name), path("ligands/*")
     path receptor
     val config
 
