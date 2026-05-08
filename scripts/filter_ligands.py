@@ -1,0 +1,147 @@
+import pandas as pd
+from rdkit import Chem
+from rdkit.Chem import Descriptors, rdMolDescriptors, rdmolops
+import argparse
+import os
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Filter ligands based on rules and docking scores."
+    )
+    parser.add_argument(
+        "--smiles",
+        default="scripts/sorted_smiles.csv",
+        help="Path to sorted SMILES CSV",
+    )
+    parser.add_argument(
+        "--scores",
+        default="scripts/sorted_file.csv",
+        help="Path to sorted docking scores CSV",
+    )
+    parser.add_argument(
+        "--output", default="scripts/filtered_ligands.csv", help="Output CSV path"
+    )
+    parser.add_argument(
+        "--verbose", action="store_true", help="Print details for each ligand"
+    )
+
+    args = parser.parse_args()
+
+    if not os.path.exists(args.smiles) or not os.path.exists(args.scores):
+        print("Error: SMILES or scores file not found.")
+        return
+
+    smiles_df = pd.read_csv(args.smiles)
+    scores_df = pd.read_csv(args.scores)
+
+    # Merge data on 'ligand:number'
+    df = pd.merge(smiles_df, scores_df, on="ligand:number")
+
+    filtered_data = []
+
+    print(f"Starting filtering of {len(df)} ligands...")
+
+    for idx, row in df.iterrows():
+        ligand_id = row["ligand:number"]
+        smiles = row["SMILES"]
+        mol = Chem.MolFromSmiles(smiles)
+
+        if mol is None:
+            if args.verbose:
+                print(f"Skipping {ligand_id}: Invalid SMILES")
+            continue
+
+        # Property calculations
+        mw = Descriptors.MolWt(mol)
+        logp = Descriptors.MolLogP(mol)
+        hbd = rdMolDescriptors.CalcNumHBD(mol)
+        hba = rdMolDescriptors.CalcNumHBA(mol)
+        psa = Descriptors.TPSA(mol)
+        charge = rdmolops.GetFormalCharge(mol)
+        heavy_atoms = mol.GetNumHeavyAtoms()
+
+        # Rule evaluation
+        pass_mw = mw < 400
+        pass_logp = logp <= 5
+        pass_hbd = hbd < 3
+        pass_hba = hba < 7
+        pass_psa = psa < 60
+        pass_charge = charge == 0
+
+        # Vina Score / Non-Hydrogen Atom Count >= 0.3
+        # We check efficiency for all available receptor scores
+        score_cols = [col for col in scores_df.columns if col != "ligand:number"]
+        efficiencies = {}
+        pass_efficiency = True
+
+        for col in score_cols:
+            score = row[col]
+            if pd.isna(score):
+                continue
+            efficiency = abs(score) / heavy_atoms
+            efficiencies[f"{col}_efficiency"] = efficiency
+            if efficiency < 0.3:
+                pass_efficiency = False
+
+        if not efficiencies:
+            pass_efficiency = False
+
+        # Check if all criteria are met
+        if all(
+            [
+                pass_mw,
+                pass_logp,
+                pass_hbd,
+                pass_hba,
+                pass_psa,
+                pass_charge,
+                pass_efficiency,
+            ]
+        ):
+            row_dict = row.to_dict()
+            row_dict.update(
+                {
+                    "MW": mw,
+                    "LogP": logp,
+                    "HBD": hbd,
+                    "HBA": hba,
+                    "TPSA": psa,
+                    "Charge": charge,
+                    "HeavyAtoms": heavy_atoms,
+                }
+            )
+            row_dict.update(efficiencies)
+            filtered_data.append(row_dict)
+        elif args.verbose:
+            reasons = []
+            if not pass_mw:
+                reasons.append(f"MW={mw:.1f}")
+            if not pass_logp:
+                reasons.append(f"LogP={logp:.1f}")
+            if not pass_hbd:
+                reasons.append(f"HBD={hbd}")
+            if not pass_hba:
+                reasons.append(f"HBA={hba}")
+            if not pass_psa:
+                reasons.append(f"PSA={psa:.1f}")
+            if not pass_charge:
+                reasons.append(f"Charge={charge}")
+            if not pass_efficiency:
+                reasons.append(
+                    f"LE={min(efficiencies.values()) if efficiencies else 0:.2f}"
+                )
+            print(f"Rejected {ligand_id}: {', '.join(reasons)}")
+
+    filtered_df = pd.DataFrame(filtered_data)
+    filtered_df.to_csv(args.output, index=False)
+
+    print("-" * 30)
+    print(f"Filtering complete.")
+    print(f"Total ligands: {len(df)}")
+    print(f"Filtered ligands: {len(filtered_df)}")
+    print(f"Results saved to: {args.output}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,7 @@
+Molecular Weight < 400 Daltons
+Lipophilicity (log P) <= 5
+Hydrogen Bond Donors < 3 (Total number of OH and NH groups)
+Hydrogen Bond Acceptors < 7 (Total number of N and O atoms)
+Vina Score / Non-Hydrogen Atom Count >= 0.3
+Polar Surface Area < 60 Aº²
+Neutral Charge
