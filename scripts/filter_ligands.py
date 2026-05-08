@@ -11,12 +11,12 @@ def main():
     )
     parser.add_argument(
         "--smiles",
-        default="scripts/sorted_smiles.csv",
+        default="data/sorted_smiles.csv",
         help="Path to sorted SMILES CSV",
     )
     parser.add_argument(
         "--scores",
-        default="scripts/sorted_file.csv",
+        default="data/sorted_file.csv",
         help="Path to sorted docking scores CSV",
     )
     parser.add_argument(
@@ -50,6 +50,16 @@ def main():
         if mol is None:
             if args.verbose:
                 print(f"Skipping {ligand_id}: Invalid SMILES")
+            continue
+
+        # Fix the "radical" issue common in some explicit SMILES exports
+        for atom in mol.GetAtoms():
+            atom.SetNumRadicalElectrons(0)
+            atom.SetNoImplicit(False)
+        try:
+            Chem.SanitizeMol(mol)
+        except:
+            if args.verbose: print(f"Skipping {ligand_id}: Sanitization failed")
             continue
 
         # Property calculations
