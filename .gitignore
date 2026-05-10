@@ -12,5 +12,7 @@ results*
 .nextflow/
 .nextflow*
 
+__pycache__
+
 data/
 .trash/

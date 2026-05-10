@@ -1,8 +1,33 @@
 import pandas as pd
 from rdkit import Chem
 from rdkit.Chem import Descriptors, rdMolDescriptors, rdmolops
+import tomllib
 import argparse
 import os
+
+
+def parse_rules(toml_path):
+    with open(toml_path, "rb") as f:
+        rules_data = tomllib.load(f)
+
+    def create_test(expr):
+        if not expr:
+            return lambda x: True
+
+        if isinstance(expr, list):
+            # If multiple rules are provided as a list, they all must pass (AND logic)
+            expr = " and ".join(f"({e})" for e in expr)
+
+        try:
+            # Pre-compile the expression for efficiency during the main loop
+            code = compile(expr, "<string>", "eval")
+            # Evaluate using restricted globals/locals for safety
+            return lambda x: bool(eval(code, {"__builtins__": {}}, {"x": x}))
+        except Exception as e:
+            print(f"Warning: Could not parse or evaluate rule '{expr}': {e}")
+            return lambda x: True
+
+    return {k: create_test(v) for k, v in rules_data.items()}
 
 
 def main():
@@ -18,6 +43,11 @@ def main():
         "--scores",
         default="data/sorted_file.csv",
         help="Path to sorted docking scores CSV",
+    )
+    parser.add_argument(
+        "--rules",
+        default="scripts/rules.toml",
+        help="Path to toml file of rules",
     )
     parser.add_argument(
         "--output", default="scripts/filtered_ligands.csv", help="Output CSV path"
@@ -37,6 +67,9 @@ def main():
 
     # Merge data on 'ligand:number'
     df = pd.merge(smiles_df, scores_df, on="ligand:number")
+
+    # Parse rules once
+    tests = parse_rules(args.rules)
 
     filtered_data = []
 
@@ -59,7 +92,8 @@ def main():
         try:
             Chem.SanitizeMol(mol)
         except:
-            if args.verbose: print(f"Skipping {ligand_id}: Sanitization failed")
+            if args.verbose:
+                print(f"Skipping {ligand_id}: Sanitization failed")
             continue
 
         # Property calculations
@@ -72,12 +106,12 @@ def main():
         heavy_atoms = mol.GetNumHeavyAtoms()
 
         # Rule evaluation
-        pass_mw = mw < 400
-        pass_logp = logp <= 5
-        pass_hbd = hbd < 3
-        pass_hba = hba < 7
-        pass_psa = psa < 60
-        pass_charge = charge == 0
+        pass_mw = tests.get("mw", lambda x: True)(mw)
+        pass_logp = tests.get("logp", lambda x: True)(logp)
+        pass_hbd = tests.get("hbd", lambda x: True)(hbd)
+        pass_hba = tests.get("hba", lambda x: True)(hba)
+        pass_psa = tests.get("psa", lambda x: True)(psa)
+        pass_charge = tests.get("charge", lambda x: True)(charge)
 
         # Vina Score / Non-Hydrogen Atom Count >= 0.3
         # We check efficiency for all available receptor scores
@@ -91,7 +125,7 @@ def main():
                 continue
             efficiency = abs(score) / heavy_atoms
             efficiencies[f"{col}_efficiency"] = efficiency
-            if efficiency < 0.3:
+            if not tests.get("vs", lambda x: True)(efficiency):
                 pass_efficiency = False
 
         if not efficiencies:
@@ -138,9 +172,8 @@ def main():
             if not pass_charge:
                 reasons.append(f"Charge={charge}")
             if not pass_efficiency:
-                reasons.append(
-                    f"LE={min(efficiencies.values()) if efficiencies else 0:.2f}"
-                )
+                le_val = min(efficiencies.values()) if efficiencies else 0
+                reasons.append(f"LE={le_val:.2f}")
             print(f"Rejected {ligand_id}: {', '.join(reasons)}")
 
     filtered_df = pd.DataFrame(filtered_data)

@@ -1,7 +1,9 @@
 import pandas as pd
 from rdkit import Chem
 from rdkit.Chem import FilterCatalog
+import argparse
 import os
+
 
 def apply_pains_filter(input_csv, output_csv):
     if not os.path.exists(input_csv):
@@ -20,9 +22,9 @@ def apply_pains_filter(input_csv, output_csv):
     pains_count = 0
 
     for _, row in df.iterrows():
-        smiles = row['SMILES']
+        smiles = row["SMILES"]
         mol = Chem.MolFromSmiles(smiles)
-        
+
         if mol:
             # Check for PAINS matches
             if catalog.HasMatch(mol):
@@ -35,7 +37,7 @@ def apply_pains_filter(input_csv, output_csv):
 
     pains_free_df = pd.DataFrame(pains_free_data)
     pains_free_df.to_csv(output_csv, index=False)
-    
+
     print("-" * 30)
     print(f"PAINS filtering complete.")
     print(f"Initial leads: {len(df)}")
@@ -43,5 +45,10 @@ def apply_pains_filter(input_csv, output_csv):
     print(f"Final clean leads: {len(pains_free_df)}")
     print(f"Clean leads saved to: {output_csv}")
 
+
 if __name__ == "__main__":
-    apply_pains_filter('data/filtered_ligands.csv', 'data/filtered_ligands_clean.csv')
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", default="data/filtered_ligands.csv")
+    parser.add_argument("--output", default="data/filtered_ligands_clean.csv")
+    args = parser.parse_args()
+    apply_pains_filter(args.input, args.output)
