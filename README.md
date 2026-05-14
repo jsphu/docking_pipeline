@@ -1,58 +1,140 @@
-## Docking pipeline
+# Molecular Docking & MD Pipeline
 
-Run `nextflow run main.nf` to start pipeline.
+A high-performance, automated pipeline for large-scale virtual screening and molecular dynamics simulations. Built with **Nextflow**, it leverages **GPU-accelerated** docking engines and provides integrated post-docking analysis and MD workflows.
 
-### Configurations
+![Pipeline Flowchart](assets/Dag.png)
 
-Use or create new configurations on `config/`
+## Quick Start
 
-```sh
-config/5TBM-GPU-ACCELERATED.config <= Using quickvina-gpu
-config/5TBM.config <= Using vina
-...
-```
-
-### Packages
-
-If you want to execute this pipeline, i suggest you to use container images;
+The fastest way to get started is using the one-shot installer.
 
 ```bash
-# QuickVina-GPU, access with QuickVina-W-GPU-2-1 on commandline
-docker pull ghcr.io/jsphu/docking_pipeline/quickvina-gpu:latest
-# Downloader used for downloading from links
-docker pull ghcr.io/jsphu/docking_pipeline/downloader:latest
+# Clone the repository
+git clone https://github.com/jsphu/docking_pipeline.git
+cd docking_pipeline
+
+# Run the installer (Docker mode is recommended)
+sudo ./install.sh --mode docker
+
+# Run a sample docking session
+nextflow run main.nf --smiles_file data/sample_ligands.smi --receptor data/receptor.pdbqt
 ```
 
-![flowchart](assets/Dag.png)
+## Key Features
 
-## Post-Docking Analysis & Filtering
+- **GPU Acceleration:** Support for `AutoDock-GPU`, `Vina-GPU`, and `QuickVina-GPU` for ultra-fast screening.
+- **Flexible Inputs:** Support for 2D (SMILES) and 3D (PDBQT) ligand inputs.
+- **Automated Downloader:** Directly fetch ligands from ZINC or other URI links.
+- **Containerized:** Full support for Docker and Singularity, ensuring reproducibility and easy deployment.
+- **Post-Docking Suite:** Integrated scripts for filtering (Lipinski, PAINS), scoring, and lead collection.
+- **Automated MD:** One-command Molecular Dynamics workflow using GROMACS (via `md_workflow.py`).
 
-After running the pipeline, you can filter the results and prepare them for the next phase (e.g., SwissADME, MD Simulations).
+## Installation & Setup
 
-### 1. Filter Best Ligands
-Filter ligands based on `scripts/rules.txt` (MW < 400, LogP <= 5, LE >= 0.3, PSA < 60, etc.) and apply **PAINS** filters to remove false positives.
+### Prerequisites
+
+- **Linux** (Ubuntu/Debian recommended) or **WSL2**.
+- **NVIDIA GPU** with latest drivers (required for GPU acceleration).
+- **Docker** or **Singularity/Apptainer** (optional but highly recommended).
+
+### Using the Installer
+
+The `install.sh` script automates the installation of Java, Nextflow, Docker, and the NVIDIA Container Toolkit.
+
+| Mode | Description |
+| :--- | :--- |
+| `docker` | (Recommended) Installs Docker, NVIDIA toolkit, and pulls images from GHCR. |
+| `wsl` | For WSL2 users with Docker Desktop on Windows. |
+| `native` | Builds everything on the host (Nextflow, Java, QuickVina-GPU binaries). |
+
 ```bash
-python3 scripts/filter_ligands.py
-python3 scripts/pains_filter.py
+# Example: Install for Linux with Docker
+sudo ./install.sh --mode docker
 ```
-*Output: `data/filtered_ligands.csv`*
 
-### 2. Prepare for SwissADME
-Standardize SMILES strings (fix radical issues and valency) for compatibility with medicinal chemistry tools.
-```bash
-python3 scripts/prepare_swissadme.py
-```
-*Output: `data/filtered_ligands.smi` (Ready to upload to SwissADME)*
+## Usage Guide
 
-### 3. Organize Lead PDBQTs
-Collect the docking pose files of the filtered leads into a single directory for visualization.
-```bash
-python3 scripts/collect_leads.py
-```
-*Output: `data/best_leads_pdbqt/`*
+### 1. Basic Docking (CPU/Vina)
 
-### 4. Generate Summary Report
-View a ranked list of the top candidates by combined efficiency.
+Run docking on a local SMILES file using standard AutoDock Vina.
+
 ```bash
-python3 scripts/summary_report.py
+nextflow run main.nf \
+  --smiles_file data/ligands.smi \
+  --receptor data/receptor.pdbqt \
+  --outdir results
 ```
+
+### 2. GPU Accelerated Docking (QuickVina-GPU)
+
+Enable GPU acceleration and provide a specialized configuration.
+
+```bash
+nextflow run main.nf \
+  --use_gpu \
+  --smiles_file data/ligands.smi \
+  --receptor data/receptor.pdbqt \
+  -c config/5TBM-GPU-ACCELERATED.config
+```
+
+### 3. Downloading from ZINC
+
+Specify a file containing download links (URIs) to fetch and dock ligands directly.
+
+```bash
+nextflow run main.nf --links_file data/ZINC-links.uri --use3d_downloader
+```
+
+### ⚙️ Main Parameters
+
+| Parameter | Default | Description |
+| :--- | :--- | :--- |
+| `--receptor` | `data/...` | Path to the receptor PDBQT file. |
+| `--smiles_file` | `''` | Input SMILES file for local screening. |
+| `--pdbqt_file` | `''` | Input PDBQT file for local screening. |
+| `--use_gpu` | `false` | Enable GPU-accelerated docking. |
+| `--center_x/y/z` | - | Coordinates of the docking box center. |
+| `--size_x/y/z` | `20.0` | Dimensions of the docking box (Angstroms). |
+| `--exhaustiveness`| `8` | Search exhaustiveness for Vina. |
+
+## Post-Docking Analysis
+
+After docking, use the provided Python suite to filter and organize your results.
+
+1. **Filter Ligands:** Applies Lipinski rules (`scripts/rules.txt`) and PAINS filters to remove false positives.
+
+    ```bash
+    python3 scripts/filter_ligands.py
+    python3 scripts/pains_filter.py
+    ```
+
+2. **Prepare SwissADME:** Standardize SMILES for online medicinal chemistry tools.
+
+    ```bash
+    python3 scripts/prepare_swissadme.py
+    ```
+
+3. **Collect Leads:** Organizes top-performing PDBQT poses into a single directory for visualization.
+
+    ```bash
+    python3 scripts/collect_leads.py
+    ```
+
+## Molecular Dynamics (MD)
+
+Perform automated GROMACS simulations for your top lead compounds:
+
+```bash
+cd scripts/md_workflow
+python3 md_workflow.py \
+  --protein protein.pdb \
+  --ligand ligand.pdbqt \
+  --config config.json \
+  --docker
+```
+
+*For more details, see the [MD Workflow documentation](scripts/md_workflow/README.md).*
+
+## License
+
+This project is licensed under the [LICENSE](LICENSE) - see the file for details.
