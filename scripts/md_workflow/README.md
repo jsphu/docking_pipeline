@@ -1,74 +1,91 @@
-# Molecular Dynamics Workflow
+# Molecular Dynamics & Analysis Workflow
 
-The workflow is fully automated via `md_workflow.py` and is controlled by an external `config.json` file.
+A fully automated suite for Protein-Ligand Molecular Dynamics simulations and post-simulation analysis using GROMACS.
 
-## Technical Implementation
+## Features
 
-### Script: `md_workflow.py`
+- **Automated Simulation (`md_workflow.py`)**: Handles protein/ligand preparation, box setup, solvation, ionization, and equilibration (EM, NVT, NPT) followed by production MD.
+- **Advanced Post-Analysis (`post_md.py`)**: Automated trajectory processing (PBC correction, fitting) and standard MD analysis.
+- **Visual Reports**: Generates standalone, self-contained HTML reports for every complex, including high-quality plots for RMSD, RMSF, Radius of Gyration, and Hydrogen Bonds.
+- **Smart Resume**: Supports resuming simulations and skipping already processed complexes.
+- **Docker Integration**: Runs GROMACS via Docker with GPU support for easy setup and high performance.
 
-- **Dynamic Configuration**: All simulation parameters (integrators, cut-offs, coupling, etc.) are read from a JSON config file.
-- **Library Repair**: Automatically detects and repairs internal `acpype` dependencies (`libmfhdf.so.0`, etc.) by setting correct symlinks and environment variables.
-- **Robust Topology Handling**: Implements a custom topology merger that correctly extracts GAFF atomtypes and inserts them at the top of the GROMACS `.top` file to prevent syntax errors.
-- **Path Isolation**: Uses absolute path resolution to ensure `gmxapi` can find all input files (protein, ligand, MDPs) within its managed execution subdirectories.
+---
 
-### Key Files
+## Installation & Requirements
 
-- `config.json`: Master configuration for production runs.
-- `md_workflow.py`: The automation engine.
-- `plotter.py`: A basic, graph tool for XVGs
+- Python 3.8+
+- Docker (for GROMACS execution)
+- Python Packages: `matplotlib`, `numpy`, `rdkit` (if preparing ligands from SMILES)
 
-## Usage Instructions
+---
 
-To perform the simulations, update your parameters in `config.json` and run:
+## Workflow Guide
+
+### 1. Production MD Simulation
+
+Run the main workflow to prepare and simulate your complexes. The script reads parameters from `config.json`.
 
 ```bash
-python3 md_workflow.py -c config.json --outdir my_results
+python3 md_workflow.py -c config.json --outdir results --docker
 ```
 
-After MD analysis, you can see graphs -XVGs- via using `plotter.py`:
+### 2. Post-MD Analysis
+
+Once the simulation is complete, run the analysis script to process trajectories and generate reports.
 
 ```bash
-python3 plotter.py XVG-file.xvg
+python3 post_md.py --outdir results --docker
 ```
 
-### Arguments
+This will:
+1. Fix PBC (Periodic Boundary Conditions).
+2. Fit the trajectory to the protein backbone.
+3. Calculate RMSD (Protein & Ligand), RMSF (Protein), Radius of Gyration, and Hydrogen Bonds.
+4. Generate an HTML report in `results/analysis_{complex_name}/`.
 
+---
+
+## Key Components
+
+### Scripts
+- `md_workflow.py`: The simulation automation engine.
+- `post_md.py`: The analysis automation engine.
+- `plotter.py`: A wrapper for plotting individual XVG files.
+
+### Configuration (`config.json`)
+Controls all simulation parameters:
+- **Force Field & Water Model**: `amber99sb-ildn`, `tip3p`, etc.
+- **Equilibration Steps**: Steps, time-steps, and coupling parameters for EM, NVT, and NPT.
+- **Production MD**: Duration, output frequency (xtc, energy, log).
+- **Environment**: Temperature, pressure, and box settings.
+
+---
+
+## Detailed Usage
+
+### `md_workflow.py` Arguments
 - `-c`, `--config`: Path to the JSON configuration file (default: `config.json`).
-- `-o`, `--outdir`: Directory where all outputs (MDPs, GROs, TOPs, XTCs) will be saved (default: `results`).
-- `-w`, `--workdir`: Directory where all internal-files used for MD (NVT, NPT, EM, CPT files) will be saved (default: `work`).
-- `--protein`, `-p PROTEIN [PROTEIN ...]` Protein files (PDB/PDBQT) or directories
-- `--ligand`, `-l LIGAND [LIGAND ...]` Ligand files (SMILES/PDBQT/MOL2) or directories
-- `--gpu` Enable GPU acceleration
-- `--no-gpu`
-- `--docker` Run via Docker
-- `--no-docker` Run from local build (e.g. /usr/local/bin/gmx)
-- `--image IMAGE` Docker image (default: `nvcr.io/hpc/gromacs:2023.2` which you can access from `ngc.nvidia.com`)
+- `-o`, `--outdir`: Directory where production results (XTC, TPR, GRO) are saved.
+- `-w`, `--workdir`: Directory for temporary simulation files.
+- `-p`, `--protein`: Protein files (PDB/PDBQT) or directories.
+- `-l`, `--ligand`: Ligand files (SMILES/PDBQT/MOL2) or directories.
+- `--gpu / --no-gpu`: Enable/Disable GPU acceleration.
+- `--docker / --no-docker`: Use Docker container for GROMACS.
 
-#### Usage
+### `post_md.py` Arguments
+- `-o`, `--outdir`: Directory where simulation results are stored (reads `.xtc` and `.tpr` files).
+- `-p`, `--protein` / `-l`, `--ligand`: (Optional) Specify specific IDs to analyze. If omitted, scans `outdir` automatically.
+- `--docker / --no-docker`: Use Docker for GROMACS analysis tools.
 
-```bash
-$ python3 md_workflow.py --help
-usage: md_workflow.py [-h] [--config CONFIG]
-                      [--protein PROTEIN [PROTEIN ...]]
-                      [--ligand LIGAND [LIGAND ...]] [--outdir OUTDIR]
-                      [--workdir WORKDIR] [--gpu] [--no-gpu] [--docker]
-                      [--no-docker] [--image IMAGE]
+---
 
-Automated MD Workflow for Protein-Ligand Complexes
+## Analysis Reports
 
-options:
-  -h, --help            show this help message and exit
-  --config, -c CONFIG   Path to config file
-  --protein, -p PROTEIN [PROTEIN ...]
-                        Protein files (PDB/PDBQT) or directories
-  --ligand, -l LIGAND [LIGAND ...]
-                        Ligand files (SMILES/PDBQT/MOL2) or directories
-  --outdir, -o OUTDIR   Output directory
-  --workdir, -w WORKDIR
-                        Working directory
-  --gpu                 Enable GPU acceleration
-  --no-gpu
-  --docker              Run via Docker
-  --no-docker
-  --image IMAGE         Docker image
-```
+The `post_md.py` script generates a standalone HTML report for each complex located at:
+`[outdir]/analysis_[complex_name]/report_[complex_name].html`
+
+**Report Features:**
+- **Self-Contained**: Plots are embedded as Base64 images; no external files needed.
+- **Print to PDF**: Optimized for browser printing. Open the HTML file, press `Ctrl+P`, and "Save as PDF" for a professional report.
+- **Metadata**: Includes force field information and simulation conditions used.
