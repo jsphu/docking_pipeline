@@ -38,6 +38,9 @@ def setup_logger(name=None):
     handler.setFormatter(ColorFormatter())
     logger.addHandler(handler)
 
+    if name is not None:
+        logger.propagate = False
+
     # If this is the root logger, prevent other libraries from being too chatty
     if name is None:
         logging.getLogger("rdkit").setLevel(logging.WARNING)

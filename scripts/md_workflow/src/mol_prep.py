@@ -114,7 +114,7 @@ def extract_first_model_pdbqt(pdbqt_file, output_file):
         f.writelines(model_lines)
 
 
-def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func):
+def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func, smiles=None):
     """
     Prepares ligand topology while strictly preserving the 3D coordinates (pose).
     Uses a template-based approach to fix bond orders and hydrogens.
@@ -123,22 +123,30 @@ def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func):
     ligand_name = os.path.splitext(os.path.basename(ligand_file))[0]
 
     # 1. Get SMILES for correct bond orders
-    # We use pdbqt_to_smiles and then clean it of radicals []
-    raw_smiles = pdbqt_to_smiles(ligand_file, workdir=output_dir)
-    if not raw_smiles:
-        logger.error(f"Error: Could not get SMILES from {ligand_file}")
-        return None, None
+    if smiles:
+        clean_smi = smiles
+    else:
+        # We use pdbqt_to_smiles and then clean it of radicals []
+        raw_smiles = pdbqt_to_smiles(ligand_file, workdir=output_dir)
+        if not raw_smiles:
+            logger.error(f"Error: Could not get SMILES from {ligand_file}")
+            return None, None
 
-    # Clean SMILES (remove brackets used for radicals in obabel output)
-    clean_smi = raw_smiles.replace("[", "").replace("]", "")
+        # Clean SMILES (remove brackets ONLY if they surround a single atom like [C])
+        # A more robust way is to use RDKit to sanitize if possible,
+        # but here we just try to remove common radical notations from obabel
+        clean_smi = raw_smiles.replace("[C]", "C").replace("[n]", "n").replace("[o]", "o")
+    
     template = Chem.MolFromSmiles(clean_smi)
-    if not template:
-        # Try without cleaning if RDKit can handle it
-        template = Chem.MolFromSmiles(raw_smiles)
+    if not template and not smiles:
+        # Try a more aggressive clean if it failed and we don't have a trusted SMILES
+        clean_smi_aggressive = clean_smi.replace("[", "").replace("]", "")
+        template = Chem.MolFromSmiles(clean_smi_aggressive)
 
     if not template:
-        logger.error(f"Error: RDKit failed to parse SMILES for {ligand_name}")
-        return None, None
+        logger.warning(f"Warning: RDKit failed to parse SMILES for {ligand_name}. Template matching will be skipped.")
+        if smiles:
+            logger.warning(f"Provided SMILES was: {smiles}")
 
     # 2. Extract first model as PDB (heavy only)
     model1_pdbqt = os.path.join(output_dir, f"{ligand_name}_model1.pdbqt")
@@ -149,10 +157,20 @@ def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func):
         return None, None
 
     try:
-        # 3. Load heavy coordinates without automatic bonding
-        pose_mol = Chem.MolFromPDBFile(heavy_pdb, proximityBonding=False)
+        # 3. Clean PDB of potentially bad CONECT records and load cleanly
+        clean_pdb = os.path.join(output_dir, f"{ligand_name}_clean_heavy.pdb")
+        with open(heavy_pdb, "r") as f_in, open(clean_pdb, "w") as f_out:
+            for line in f_in:
+                if not line.startswith("CONECT"):
+                    f_out.write(line)
+        
+        # Load heavy coordinates WITHOUT proximity bonding or sanitization (let the template handle it)
+        pose_mol = Chem.MolFromPDBFile(clean_pdb, proximityBonding=False, sanitize=False)
         if not pose_mol:
-            raise RuntimeError("RDKit failed to read heavy PDB")
+            raise RuntimeError("RDKit failed to read heavy PDB (clean)")
+
+        if not template:
+            raise RuntimeError("No valid template for bond order assignment")
 
         # 4. Assign Bond Orders from Template
         # This is the magic step that fixes everything
@@ -161,23 +179,42 @@ def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func):
         # 5. Add Hydrogens while preserving coordinates
         fixed_mol = Chem.AddHs(fixed_mol, addCoords=True)
 
-        # 6. Final verification
-        total_electrons = sum([a.GetAtomicNum() for a in fixed_mol.GetAtoms()])
-        if total_electrons % 2 != 0:
-            logger.warning(
-                f"Warning: {ligand_name} still has an odd number of electrons ({total_electrons})."
-            )
-
-        # 7. Write to PDB for acpype
-        final_input = os.path.join(output_dir, f"{ligand_name}_fixed.pdb")
-        Chem.MolToPDBFile(fixed_mol, final_input)
-
     except Exception as e:
-        logger.error(
-            f"Error during template-based prep for {ligand_name}: {e}. Falling back to standard conversion."
+        logger.warning(
+            f"Template-based matching failed for {ligand_name}: {e}. Attempting recovery by embedding SMILES and aligning to pose."
         )
-        final_input = os.path.join(output_dir, f"{ligand_name}_pose.pdb")
-        run_obabel(model1_pdbqt, final_input, options=["-h"])
+        if not template:
+            logger.error(f"Error: No valid SMILES template for {ligand_name}. Cannot recover.")
+            return None, None
+            
+        try:
+            # Create a fresh 3D structure from SMILES (Guaranteed valid topology)
+            fresh_mol = Chem.AddHs(template)
+            params = AllChem.ETKDGv3()
+            params.useRandomCoords = True
+            params.randomSeed = 42
+            if AllChem.EmbedMolecule(fresh_mol, params) != 0:
+                 raise RuntimeError("Failed to embed fresh SMILES")
+            
+            # Load the distorted pose for alignment (as many atoms as we can get)
+            pose_raw = Chem.MolFromPDBFile(heavy_pdb, proximityBonding=False, sanitize=False)
+            if pose_raw and fresh_mol.GetNumHeavyAtoms() == pose_raw.GetNumAtoms():
+                # Rigid alignment of the valid structure to the docked coordinates
+                # This keeps the chemical bonds correct but puts atoms near the dock pose
+                AllChem.AlignMol(fresh_mol, pose_raw)
+                logger.info(f"Successfully aligned fresh structure to pose for {ligand_name}")
+            else:
+                logger.warning(f"Could not align {ligand_name} (atom count mismatch). Using fresh conformation only.")
+            
+            fixed_mol = fresh_mol
+            final_input = os.path.join(output_dir, f"{ligand_name}_aligned.pdb")
+            Chem.MolToPDBFile(fixed_mol, final_input)
+
+        except Exception as re:
+            logger.warning(f"Warning: RDKit failed fresh embedding for {ligand_name}: {re}. Using minimized obabel fallback.")
+            final_input = os.path.join(output_dir, f"{ligand_name}_minimized.pdb")
+            # Minimize with obabel to fix clashing atoms before acpype
+            run_obabel(model1_pdbqt, final_input, options=["-h", "--minimize", "--steps", "500"])
 
     # Run acpype
     if not run_command_func(
@@ -193,9 +230,12 @@ def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func):
             "gaff2",
             "-b",
             ligand_name,
+            "-f",
         ],
         cwd=output_dir,
     ):
+        # Even if acpype fails, try to return something if possible or just log error
+        logger.error(f"Critical: acpype failed for {ligand_name} even with fallback.")
         return None, None
 
     acpype_out_dir = os.path.join(output_dir, f"{ligand_name}.acpype")
@@ -207,9 +247,9 @@ def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func):
     return None, None
 
 
-def prepare_ligand_from_file(ligand_file, output_dir, run_command_func):
+def prepare_ligand_from_file(ligand_file, output_dir, run_command_func, smiles=None):
     """
     Handles ligand preparation. If it's a coordinate-based file (PDBQT/MOL2),
     it preserves the pose.
     """
-    return prepare_ligand_from_pose(ligand_file, output_dir, run_command_func)
+    return prepare_ligand_from_pose(ligand_file, output_dir, run_command_func, smiles=smiles)

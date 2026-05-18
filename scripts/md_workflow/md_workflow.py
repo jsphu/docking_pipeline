@@ -77,6 +77,9 @@ def main():
     parser.add_argument(
         "--image", default="nvcr.io/hpc/gromacs:2023.2", help="Docker image"
     )
+    parser.add_argument(
+        "--skip-prep", action="store_true", help="Skip ligand and protein preparation steps"
+    )
 
     args = parser.parse_args()
 
@@ -155,15 +158,16 @@ def main():
                 )
     if "ligands" in cfg:
         for l in cfg["ligands"]:
+            entry = {"id": l["id"]}
             if "file" in l:
-                path = os.path.abspath(
+                entry["file"] = os.path.abspath(
                     os.path.join(os.path.dirname(config_path), l["file"])
                 )
-                if not any(lp.get("file") == path for lp in ligands_to_prep):
-                    ligands_to_prep.append({"file": path, "id": l["id"]})
-            elif "smiles" in l:
-                if not any(lp.get("smiles") == l["smiles"] for lp in ligands_to_prep):
-                    ligands_to_prep.append({"smiles": l["smiles"], "id": l["id"]})
+            if "smiles" in l:
+                entry["smiles"] = l["smiles"]
+
+            if not any(lp.get("id") == entry["id"] for lp in ligands_to_prep):
+                ligands_to_prep.append(entry)
 
     if not protein_files or not ligands_to_prep:
         logger.error(
@@ -180,16 +184,41 @@ def main():
     prep_dir = os.path.join(workdir, "md_prep")
     os.makedirs(prep_dir, exist_ok=True)
     for lig in ligands_to_prep:
+        lig_prep_dir = os.path.join(prep_dir, f"ligand_{lig['id']}")
+
+        # The actual name used inside acpype is the basename of the input file
+        if "file" in lig:
+            base_name = os.path.splitext(os.path.basename(lig["file"]))[0]
+        else:
+            base_name = lig["id"]
+
+        acpype_dir = os.path.join(lig_prep_dir, f"{base_name}.acpype")
+        itp_file = os.path.abspath(os.path.join(acpype_dir, f"{base_name}_GMX.itp"))
+        gro_file = os.path.abspath(os.path.join(acpype_dir, f"{base_name}_GMX.gro"))
+
+        if os.path.exists(itp_file) and os.path.exists(gro_file):
+            logger.info(f"--- Ligand {lig['id']} already prepared. Skipping. ---")
+            ligand_data[lig['id']] = {"itp": itp_file, "gro": gro_file}
+            continue
+
+        if args.skip_prep:
+            logger.warning(f"--- Skipping preparation for ligand {lig['id']} as requested (Files missing!) ---")
+            continue
+
+
         logger.info(f"--- Preparing Topology for Ligand {lig['id']} ---")
         if "file" in lig:
             itp, gro = prepare_ligand_from_file(
-                lig["file"], os.path.join(prep_dir, f"ligand_{lig['id']}"), run_command
+                lig["file"],
+                lig_prep_dir,
+                run_command,
+                smiles=lig.get("smiles"),
             )
         else:
             itp, gro = prepare_ligand(
                 lig["id"],
                 lig["smiles"],
-                os.path.join(prep_dir, f"ligand_{lig['id']}"),
+                lig_prep_dir,
                 run_command,
             )
         if itp and gro:
@@ -197,138 +226,183 @@ def main():
 
     # Main Loop
     for prot_input in protein_files:
-        prot_file, prot_id = prepare_protein(prot_input, workdir)
-        if not prot_file:
+        prot_id = os.path.splitext(os.path.basename(prot_input))[0]
+        prot_file = os.path.join(workdir, f"{prot_id}.pdb")
+
+        if os.path.exists(prot_file):
+            logger.info(f"--- Protein {prot_id} already prepared. Skipping. ---")
+        elif args.skip_prep:
+            logger.warning(f"--- Skipping complex for protein {prot_id} as requested (Protein file missing!) ---")
             continue
+        else:
+            prot_file, prot_id = prepare_protein(prot_input, workdir)
+            if not prot_file:
+                continue
 
         for lig_id, lig_paths in ligand_data.items():
             complex_name = f"{prot_id}_{lig_id}"
+
+            # Skip if already done
+            final_gro_marker = os.path.join(outdir, f"{complex_name}_md.gro")
+            if os.path.exists(final_gro_marker):
+                logger.info(
+                    f"--- Skipping Complex: {complex_name} (Already processed) ---"
+                )
+                continue
+            
+            # Smart Resume: Check if we can skip to Production MD
+            md_cpt = os.path.join(outdir, f"{complex_name}_md.cpt")
+            md_tpr = os.path.join(outdir, f"{complex_name}_md.tpr")
+            skip_equil = os.path.exists(md_cpt) or os.path.exists(md_tpr)
+
             logger.info(f"--- Processing Complex: {complex_name} ---")
 
             # 1. Run pdb2gmx
             prot_gro_raw = os.path.join(workdir, f"{complex_name}_prot_raw.gro")
             prot_top = os.path.join(workdir, f"{complex_name}_prot.top")
-            logger.info(f"--- Running pdb2gmx for {complex_name} ---")
-            if not run_gmx(
-                [
-                    "pdb2gmx",
-                    "-ff",
-                    cfg["force_field"],
-                    "-water",
-                    cfg["water_model"],
-                    "-ignh",
-                    "-missing",
-                ],
-                input_files={"-f": prot_file},
-                output_files={"-o": prot_gro_raw, "-p": prot_top},
-                use_docker=args.docker,
-                image=args.image,
-                host_root=host_root,
-                cwd=workdir,
-            ):
-                logger.critical(
-                    f"CRITICAL ERROR: pdb2gmx failed for {complex_name}. Exiting."
-                )
-                sys.exit(1)
-
-            # 2. Repair pdb2gmx output in-place
-            fix_gro(prot_gro_raw)
-
-            # 3. Center the repaired protein to get a GOOD reference frame
-            prot_gro = os.path.join(workdir, f"{complex_name}_prot.gro")
-            if not run_gmx(
-                ["editconf", "-c"],
-                input_files={"-f": prot_gro_raw},
-                output_files={"-o": prot_gro},
-                use_docker=args.docker,
-                image=args.image,
-                host_root=host_root,
-                cwd=workdir,
-            ):
-                logger.critical(
-                    f"CRITICAL ERROR: editconf centering failed for {complex_name}. Exiting."
-                )
-                sys.exit(1)
-
-            # Ensure unique posre.itp per complex
-            handle_posre(prot_top, workdir, complex_name)
-
-            complex_gro = os.path.join(workdir, f"{complex_name}_complex.gro")
-            try:
-                # 4. Merge protein and ligand
-                # Since prot_gro is centered, merge_complex will now center the ligand to origin automatically
-                lig_itp_local = os.path.join(
-                    workdir, os.path.basename(lig_paths["itp"])
-                )
-                shutil.copy(lig_paths["itp"], lig_itp_local)
-
-                merge_complex(prot_gro, lig_paths["gro"], complex_gro)
-                update_topology(prot_top, lig_itp_local, workdir)
-
-                final_gro = setup_system(
-                    complex_gro,
-                    prot_top,
-                    complex_name,
-                    cfg,
-                    outdir,
-                    workdir,
+            final_cpt = None # Initialize
+            
+            if skip_equil and os.path.exists(prot_top):
+                logger.info(f"--- Resuming MD for {complex_name}: Skipping Prep/Equilibration ---")
+                # Attempt to find the last successful gro/cpt files for grompp backup
+                final_gro, final_cpt = None, None
+                for step in ["npt", "nvt", "em"]:
+                    # Try workdir then outdir
+                    for search_dir in [workdir, outdir]:
+                        pg = os.path.join(search_dir, f"{complex_name}_{step}.gro")
+                        pc = os.path.join(search_dir, f"{complex_name}_{step}.cpt")
+                        if os.path.exists(pg):
+                            final_gro = pg
+                            if os.path.exists(pc):
+                                final_cpt = pc
+                            break
+                    if final_gro:
+                        break
+            else:
+                logger.info(f"--- Running pdb2gmx for {complex_name} ---")
+                if not run_gmx(
+                    [
+                        "pdb2gmx",
+                        "-ff",
+                        cfg["force_field"],
+                        "-water",
+                        cfg["water_model"],
+                        "-ignh",
+                        "-missing",
+                    ],
+                    input_files={"-f": prot_file},
+                    output_files={"-o": prot_gro_raw, "-p": prot_top},
                     use_docker=args.docker,
                     image=args.image,
                     host_root=host_root,
-                )
-            except Exception as e:
-                logger.critical(
-                    f"CRITICAL ERROR: Preparation failed for {complex_name}: {e}. Exiting."
-                )
-                sys.exit(1)
+                    cwd=workdir,
+                ):
+                    logger.error(f"ERROR: pdb2gmx failed for {complex_name}. Skipping.")
+                    continue
+
+                # 2. Repair pdb2gmx output in-place
+                fix_gro(prot_gro_raw)
+
+                # 3. Center the repaired protein to get a GOOD reference frame
+                prot_gro = os.path.join(workdir, f"{complex_name}_prot.gro")
+                if not run_gmx(
+                    ["editconf", "-c"],
+                    input_files={"-f": prot_gro_raw},
+                    output_files={"-o": prot_gro},
+                    use_docker=args.docker,
+                    image=args.image,
+                    host_root=host_root,
+                    cwd=workdir,
+                ):
+                    logger.error(f"ERROR: editconf centering failed for {complex_name}. Skipping.")
+                    continue
+
+                # Ensure unique posre.itp per complex
+                handle_posre(prot_top, workdir, complex_name)
+
+                complex_gro = os.path.join(workdir, f"{complex_name}_complex.gro")
+                try:
+                    # 4. Merge protein and ligand
+                    lig_itp_local = os.path.join(
+                        workdir, os.path.basename(lig_paths["itp"])
+                    )
+                    shutil.copy(lig_paths["itp"], lig_itp_local)
+
+                    merge_complex(prot_gro, lig_paths["gro"], complex_gro)
+                    update_topology(prot_top, lig_itp_local, workdir)
+
+                    final_gro = setup_system(
+                        complex_gro,
+                        prot_top,
+                        complex_name,
+                        cfg,
+                        outdir,
+                        workdir,
+                        use_docker=args.docker,
+                        image=args.image,
+                        host_root=host_root,
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"ERROR: Preparation failed for {complex_name}: {e}. Skipping to next complex."
+                    )
+                    continue
 
             # Simulation Steps
             try:
-                logger.info(f"Starting EM for {complex_name}...")
-                gro, cpt = run_step(
-                    "em",
-                    mdp_paths["em.mdp"],
-                    final_gro,
-                    prot_top,
-                    complex_name,
-                    outdir,
-                    workdir,
-                    gpu=args.gpu,
-                    use_docker=args.docker,
-                    image=args.image,
-                    host_root=host_root,
-                )
+                gro, cpt = None, None
+                
+                if not skip_equil:
+                    logger.info(f"Starting EM for {complex_name}...")
+                    gro, cpt = run_step(
+                        "em",
+                        mdp_paths["em.mdp"],
+                        final_gro,
+                        prot_top,
+                        complex_name,
+                        outdir,
+                        workdir,
+                        gpu=args.gpu,
+                        use_docker=args.docker,
+                        image=args.image,
+                        host_root=host_root,
+                    )
 
-                logger.info(f"Starting NVT for {complex_name}...")
-                gro, cpt = run_step(
-                    "nvt",
-                    mdp_paths["nvt.mdp"],
-                    gro,
-                    prot_top,
-                    complex_name,
-                    outdir,
-                    workdir,
-                    gpu=args.gpu,
-                    use_docker=args.docker,
-                    image=args.image,
-                    host_root=host_root,
-                )
+                    logger.info(f"Starting NVT for {complex_name}...")
+                    gro, cpt = run_step(
+                        "nvt",
+                        mdp_paths["nvt.mdp"],
+                        gro,
+                        prot_top,
+                        complex_name,
+                        outdir,
+                        workdir,
+                        gpu=args.gpu,
+                        use_docker=args.docker,
+                        image=args.image,
+                        host_root=host_root,
+                    )
 
-                logger.info(f"Starting NPT for {complex_name}...")
-                gro, cpt = run_step(
-                    "npt",
-                    mdp_paths["npt.mdp"],
-                    gro,
-                    prot_top,
-                    complex_name,
-                    outdir,
-                    workdir,
-                    gpu=args.gpu,
-                    prev_cpt=cpt,
-                    use_docker=args.docker,
-                    image=args.image,
-                    host_root=host_root,
-                )
+                    logger.info(f"Starting NPT for {complex_name}...")
+                    gro, cpt = run_step(
+                        "npt",
+                        mdp_paths["npt.mdp"],
+                        gro,
+                        prot_top,
+                        complex_name,
+                        outdir,
+                        workdir,
+                        gpu=args.gpu,
+                        prev_cpt=cpt,
+                        use_docker=args.docker,
+                        image=args.image,
+                        host_root=host_root,
+                    )
+                else:
+                    # For MD resume, we use the TPR we already have, 
+                    # but we provide final_gro/final_cpt just in case grompp needs to rerun
+                    gro = final_gro
+                    cpt = final_cpt
 
                 logger.info(f"Starting Production MD for {complex_name}...")
                 run_step(
@@ -354,10 +428,10 @@ def main():
                     shutil.copy(f, outdir)
 
             except Exception as e:
-                logger.critical(
-                    f"CRITICAL ERROR: Simulation failed for {complex_name}: {e}. Exiting."
+                logger.error(
+                    f"ERROR: Simulation failed for {complex_name}: {e}. Skipping to next complex."
                 )
-                sys.exit(1)
+                continue
 
 
 if __name__ == "__main__":

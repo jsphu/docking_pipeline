@@ -21,20 +21,23 @@ def setup_acpype_libs():
     return None
 
 
-def run_command(cmd, shell=False, cwd=None):
+def run_command(cmd, shell=False, cwd=None, env=None):
     """Utility to run shell commands and handle errors."""
     logger.info(f"Running: {' '.join(cmd) if isinstance(cmd, list) else cmd}")
 
-    env = os.environ.copy()
+    full_env = os.environ.copy()
+    if env:
+        full_env.update(env)
+    
     lib_path = setup_acpype_libs()
     if lib_path:
-        existing_ld = env.get("LD_LIBRARY_PATH", "")
-        env["LD_LIBRARY_PATH"] = (
+        existing_ld = full_env.get("LD_LIBRARY_PATH", "")
+        full_env["LD_LIBRARY_PATH"] = (
             f"{lib_path}:{existing_ld}" if existing_ld else lib_path
         )
 
     result = subprocess.run(
-        cmd, shell=shell, capture_output=True, text=True, env=env, cwd=cwd
+        cmd, shell=shell, capture_output=True, text=True, env=full_env, cwd=cwd
     )
     if result.returncode != 0:
         logger.error(f"Error (Exit Code {result.returncode}):")

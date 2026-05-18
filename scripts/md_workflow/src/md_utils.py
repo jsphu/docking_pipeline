@@ -13,9 +13,9 @@ def generate_mdp_files(cfg, outdir):
     mdps = {
         "em.mdp": f"""
 integrator      = steep
-emtol           = 10000.0
-emstep          = 0.0005
-nsteps          = 100000
+emtol           = {cfg["em"]["emtol"]}
+emstep          = {cfg["em"]["emstep"]}
+nsteps          = {cfg["em"]["nsteps"]}
 nstlist         = 1
 cutoff-scheme   = {cfg["cutoff_scheme"]}
 coulombtype     = {cfg["coulombtype"]}
@@ -162,30 +162,44 @@ def run_step(
     if prev_cpt:
         grompp_input["-t"] = prev_cpt
 
-    if not run_gmx(
-        grompp_args,
-        input_files=grompp_input,
-        output_files={"-o": tpr},
-        use_docker=use_docker,
-        image=image,
-        host_root=host_root,
-        cwd=target_dir,
-    ):
-        raise RuntimeError(f"grompp ({step_name}) failed")
+    if gro is None and os.path.exists(tpr):
+        logger.info(f"--- {step_name.upper()}: Using existing TPR file: {tpr} ---")
+    else:
+        if not run_gmx(
+            grompp_args,
+            input_files=grompp_input,
+            output_files={"-o": tpr},
+            use_docker=use_docker,
+            image=image,
+            host_root=host_root,
+            cwd=target_dir,
+        ):
+            raise RuntimeError(f"grompp ({step_name}) failed")
 
     md_out_base = f"{output_prefix}_{step_name}"
     md_out_abs = os.path.abspath(os.path.join(target_dir, md_out_base))
+    cpt_file = f"{md_out_abs}.cpt"
 
-    md_args = ["mdrun", "-deffnm", md_out_abs]
+    md_args = ["mdrun", "-deffnm", md_out_abs, "-ntomp", "1"]
+    md_input = {"-s": tpr}
+
+    # If production MD and checkpoint exists, resume
+    if step_name == "md" and os.path.exists(cpt_file):
+        logger.info(f"Existing checkpoint found for {step_name}. Resuming...")
+        md_input["-cpi"] = cpt_file
+
     if gpu and step_name != "em":
-        md_args.extend(["-nb", "gpu", "-pme", "gpu", "-bonded", "gpu"])
+        # -nb gpu and -pme gpu are stable and fast.
+        # -bonded gpu and GPU updates can cause segfaults (Code 139) if update groups are not possible.
+        # We explicitly force -update cpu to ensure stability.
+        md_args.extend(["-nb", "gpu", "-pme", "gpu", "-update", "cpu"])
     elif gpu and step_name == "em":
         # Force CPU for EM to avoid GPU crashes on high strain
         md_args.extend(["-nb", "cpu"])
 
     if not run_gmx(
         md_args,
-        input_files={"-s": tpr},
+        input_files=md_input,
         use_docker=use_docker,
         image=image,
         host_root=host_root,
