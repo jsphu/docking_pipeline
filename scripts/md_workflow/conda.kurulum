@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+
+# Renk Kodları (Terminal çıktılarını özelleştirmek için)
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # Renk Yok (Sıfırlama)
+
+# Hata oluşursa betiği anında durdur
+set -e
+
+# Apt güncellemelerini tamamen sessiz/etkileşimsiz moda al (Soru sormasını engeller)
+export DEBIAN_FRONTEND=noninteractive
+
+clear
+echo -e "${CYAN}===================================================================${NC}"
+echo -e "${CYAN}    CONDA ORTAMI VE ACPYPE OTONOM KURULUM SİHİRBAZI                ${NC}"
+echo -e "${CYAN}===================================================================${NC}"
+echo -e "${YELLOW}[UYARI] Bu işlem tamamen otomatik ilerleyecektir. Lütfen bekleyin...${NC}\n"
+
+# --- ADIM 1: Bağımlılıkların Kurulması ---
+echo -e "${YELLOW}[1/6] Sistem paketleri güncelleniyor ve bağımlılıklar kuruluyor...${NC}"
+sudo -E apt update
+sudo -E apt upgrade -y -o Dpkg::Options::="--force-confold"
+sudo -E apt install -y wget python3 openbabel
+echo -e "${GREEN}[BAŞARILI] Sistem bağımlılıkları yüklendi.${NC}\n"
+
+# --- ADIM 2: Miniconda İndirme ve Kurma ---
+echo -e "${YELLOW}[2/6] Miniconda indiriliyor ve kuruluyor...${NC}"
+mkdir -p ~/miniconda3
+wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
+bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
+rm -rf ~/miniconda3/miniconda.sh
+echo -e "${GREEN}[BAŞARILI] Miniconda diske kuruldu.${NC}\n"
+
+# --- ADIM 3: Conda Çevre Değişkenlerinin Yüklenmesi ---
+echo -e "${YELLOW}[3/6] Conda alt kabuk (subshell) için aktif ediliyor...${NC}"
+# Bu satır script içinde 'source ~/.bashrc' çalışmama sorununu çözer
+source ~/miniconda3/etc/profile.d/conda.sh
+
+echo -e "${GREEN}[KONTROL] Kurulan Conda Sürümü:${NC} $(conda --version)\n"
+
+# --- ADIM 4: Conda Sanal Ortamı Oluşturma ---
+echo -e "${YELLOW}[4/6] 'md_env' adında yeni Conda ortamı oluşturuluyor...${NC}"
+# -y bayrağı otomatik 'evet' der
+conda create -n md_env -c conda-forge acpype -y
+echo -e "${GREEN}[BAŞARILI] Sanal ortam oluşturuldu.${NC}\n"
+
+# --- ADIM 5: Ortamın Aktif Edilmesi ve Python Paketleri ---
+echo -e "${YELLOW}[5/6] Sanal ortam aktif ediliyor ve Python paketleri kuruluyor...${NC}"
+conda activate md_env
+
+pip install --upgrade pip
+pip install acpype
+
+if [ -f requirements.txt ]; then
+  echo -e "${BLUE}[BİLGİ] requirements.txt bulundu, paketler yükleniyor...${NC}"
+  pip install -r requirements.txt
+else
+  echo -e "${YELLOW}[UYARI] requirements.txt bulunamadı, bu adım atlanıyor...${NC}"
+fi
+echo -e "${GREEN}[BAŞARILI] Python bağımlılıkları tamamlandı.${NC}\n"
+
+# --- ADIM 6: Doğrulama ---
+echo -e "${YELLOW}[6/6] ACPYPE kurulumu doğrulanıyor...${NC}"
+acpype -h
+
+# --- BİTİŞ EKRANI ---
+echo ""
+echo -e "${GREEN}===================================================================${NC}"
+echo -e "${GREEN}                KURULUM BAŞARIYLA TAMAMLANDI!                      ${NC}"
+echo -e "${GREEN}===================================================================${NC}"
+echo -e "Conda'yı terminalinizde manuel olarak kullanmaya başlamak için"
+echo -e "lütfen şu komutu çalıştırarak terminalinizi yenileyin:"
+echo ""
+echo -e "   ${RED}source ${YELLOW}~/.bashrc${NC}"
+echo ""
+echo -e "${CYAN}-------------------------------------------------------------------${NC}"
+echo -e "Yenileme işleminden sonra, Docker adımları için ${BLUE}docker.install${NC}"
+echo -e "veya Türkçe rehber için ${BLUE}docker.kurulum${NC} adımları ile devam edebilirsiniz."
+echo -e "${CYAN}-------------------------------------------------------------------${NC}"
+echo ""
+

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+echo "Before starting please sign up to https://ngc.nvidia.com/"
+echo "This is important, since the image of gromacs needs authorization"
+echo "After signing up proceed to the steps on that website."
+echo "Here is the same thing so if you have done that, please skip."
+echo ""
+echo "1. Sign in to your account at ngc.nvidia.com"
+echo "2. Go to setup settings (Click the right corner on your profile name)"
+echo "3. Proceed to 'Get API Key'"
+echo "4. Now click to 'Generate API Key'"
+echo "5. IMPORTANT: Copy the api key and save it in a safe place."
+
+echo "If you are done enter 'y'"
+
+while true; do
+  read -p "Enter [y] or [Y]: " -rsn1 isY
+  if [[ ${isY,,} == "y" ]]; then
+    break
+  fi
+done
+
+set -e
+
+echo "Checking system status.."
+sudo apt update && sudo apt upgrade -y
+sudo apt install git python3-pip python3-venv -y
+
+echo "Everything is fine, checking docker.."
+docker --version
+docker ps
+
+echo "Docker is fine, lets login to 'nvcr.io'"
+echo ""
+echo $'Type your username as this: `$oauthtoken`'
+echo $'yes include the dollar `$` sign too.'
+echo ""
+echo "After username please copy your API key, and paste in to the password."
+docker login nvcr.io
+
+echo "Everything is fine! now you are ready to run the workflow!"
+echo "You can now check 'example.sh' to look examples of running the pipeline."

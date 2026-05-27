@@ -1,7 +1,36 @@
-#/usr/bin/env bash
-conda create -n acpype_env -c conda-forge acpype
-conda install -c conda-forge acpype
+#!/usr/bin/env bash
+set -e
+export DEBIAN_FRONTEND=noninteractive
+
+sudo -E apt update
+sudo -E apt upgrade -y -o Dpkg::Options::="--force-confold"
+sudo -E apt install -y wget python3 openbabel
+
+mkdir -p ~/miniconda3
+wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
+bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
+rm -rf ~/miniconda3/miniconda.sh
+
+# Initialize conda for the current script's subshell context
+# (This acts as the fix for 'source ~/.bashrc' not working in scripts)
+source ~/miniconda3/etc/profile.d/conda.sh
+
+conda --version
+
+conda create -n md_env -c conda-forge acpype -y
+
+conda activate md_env
+
+pip install --upgrade pip
 pip install acpype
-sudo apt install openbabel -y
+
+pip install -r requirements.txt
 
 acpype -h
+
+echo "Installation complete!"
+echo "Please source ~/.bashrc to start using Conda manually."
+echo "RUN THIS ==> source ~/.bashrc <== RUN THIS"
+echo ""
+echo "After sourcing, please proceed to docker.install and continue to the next step."
+echo "Check docker.kurulum if you are native Turkish."

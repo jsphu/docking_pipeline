@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+
+# Renk Kodları (Terminal çıktılarını daha okunabilir ve profesyonel yapmak için)
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # Renk Yok (Sıfırlama)
+
+clear
+echo -e "${CYAN}===================================================================${NC}"
+echo -e "${CYAN}      DOCKING PIPELINE - WSL & DOCKER KURULUM SİHİRBAZI            ${NC}"
+echo -e "${CYAN}===================================================================${NC}"
+echo ""
+echo -e "${YELLOW}[ÖNEMLİ ADIM] NVIDIA NGC Hesabı ve API Anahtarı Hazırlığı${NC}"
+echo -e "GROMACS imajını indirebilmek için NVIDIA NGC yetkilendirmesi gereklidir."
+echo -e "Eğer hazırda bir API anahtarınız yoksa lütfen aşağıdaki adımları takip edin:"
+echo ""
+echo -e "  1. ${BLUE}https://ngc.nvidia.com/${NC} adresine gidin ve üye olun/giriş yapın."
+echo -e "  2. Sağ üst köşedeki profil isminize tıklayıp ${BLUE}'Setup'${NC} ayarlarına gidin."
+echo -e "  3. ${BLUE}'Get API Key'${NC} seçeneğine tıklayın."
+echo -e "  4. ${BLUE}'Generate API Key'${NC} butonuna basarak anahtarınızı oluşturun."
+echo -e "  5. ${RED}ÖNEMLİ:${NC} Ekrana gelen uzun API anahtarını kopyalayıp güvenli bir yere kaydedin."
+echo ""
+echo -e "${CYAN}===================================================================${NC}"
+echo -e "Yukarıdaki adımları tamamladıysanız ve API anahtarınız hazırsa,"
+echo -e "Devam etmek için lütfen klavyeden ${GREEN}[Y]${NC} tuşuna basın..."
+
+# Kullanıcının Y veya y tuşuna basmasını bekleyen döngü
+while true; do
+  read -p "" -rsn1 isY
+  if [[ ${isY,,} == "y" ]]; then
+    echo -e "\n${GREEN}[BAŞARILI]${NC} Ön hazırlık onaylandı. Kurulum başlıyor...\n"
+    break
+  fi
+done
+
+# Herhangi bir komut hata verirse scriptin durmasını sağlar
+set -e
+
+# --- ADIM 1: Sistem Güncellemeleri ---
+echo -e "${YELLOW}[ADIM 1/4]¹ Sistem Paketleri Güncelleniyor...${NC}"
+echo -e "Bu işlem internet hızınıza bağlı olarak birkaç dakika sürebilir."
+sudo apt update && sudo apt upgrade -y
+
+echo -e "\n${YELLOW}[ADIM 2/4] Gerekli Araçlar Kuruluyor (Git, Python, Venv)...${NC}"
+sudo apt install git python3-pip python3-venv -y
+
+# --- ADIM 2: Docker Kontrolü ---
+echo -e "\n${YELLOW}[ADIM 3/4] Docker Durumu Kontrol Ediliyor...${NC}"
+if ! command -v docker &>/dev/null; then
+  echo -e "${RED}[HATA] Docker bulunamadı! Lütfen Windows'ta Docker Desktop'ı başlatın ve WSL entegrasyonunu açın.${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}[DOCKER SÜRÜMÜ]:${NC} $(docker --version)"
+# Docker daemon'ın çalışıp çalışmadığını test etme
+if ! docker ps &>/dev/null; then
+  echo -e "${RED}[HATA] Docker çalışıyor ama WSL erişimi yok. Docker Desktop uygulamasının açık olduğundan emin olun.${NC}"
+  exit 1
+fi
+echo -e "${GREEN}[DOCKER DURUMU]:${NC} Aktif ve erişilebilir."
+
+# --- ADIM 3: NVIDIA NGC Girişi ---
+echo -e "\n${YELLOW}[ADIM 4/4] NVIDIA Container Registry ('nvcr.io') Girişi${NC}"
+echo -e "${CYAN}-------------------------------------------------------------------${NC}"
+echo -e "Birazdan sizden Username ve Password istenecek."
+echo -e "Lütfen bilgileri aşağıdaki gibi eksiksiz giriniz:"
+echo ""
+echo -e "  ${GREEN}Username:${NC} ${BLUE}\$oauthtoken${NC}  (Başındaki ${BLUE}\$${NC} işareti dahil aynen yazın)"
+echo -e "  ${GREEN}Password:${NC} Kopyaladığınız uzun ${BLUE}NGC API Anahtarını${NC} buraya yapıştırın."
+echo -e "            ${RED}(Not: Şifreyi yapıştırırken ekranda karakter görünmez, direkt Enter'a basın)${NC}"
+echo -e "${CYAN}-------------------------------------------------------------------${NC}"
+echo ""
+
+# Docker login işlemini başlat
+docker login nvcr.io
+
+# --- ADIM 4: Tamamlanma Ekranı ---
+echo ""
+echo -e "${GREEN}===================================================================${NC}"
+echo -e "${GREEN}       TEBRİKLER! TÜM KURULUM VE YETKİLENDİRMELER TAMAMLANDI        ${NC}"
+echo -e "${GREEN}===================================================================${NC}"
+echo -e "İş akışını (workflow) çalıştırmak için her şey hazır."
+echo -e "Nasıl çalıştıracağınızı görmek ve örnekleri incelemek için şu dosyaya göz atabilirsiniz:"
+echo -e "  ${CYAN}example.sh${NC}"
+echo -e "  ${RED}ornek.sh${NC} <== Bu da türkçe versiyonu"
+echo ""
+
