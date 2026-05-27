@@ -180,7 +180,7 @@ def run_step(
     md_out_abs = os.path.abspath(os.path.join(target_dir, md_out_base))
     cpt_file = f"{md_out_abs}.cpt"
 
-    md_args = ["mdrun", "-deffnm", md_out_abs, "-ntomp", "1"]
+    md_args = ["mdrun", "-deffnm", md_out_abs, "-ntomp", "1", "-ntmpi", "1"]
     md_input = {"-s": tpr}
 
     # If production MD and checkpoint exists, resume

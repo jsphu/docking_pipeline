@@ -240,7 +240,10 @@ def main():
                 continue
 
         for lig_id, lig_paths in ligand_data.items():
-            complex_name = f"{prot_id}_{lig_id}"
+            if lig_id.startswith(prot_id + "_"):
+                complex_name = lig_id
+            else:
+                complex_name = f"{prot_id}_{lig_id}"
 
             # Skip if already done
             final_gro_marker = os.path.join(outdir, f"{complex_name}_md.gro")

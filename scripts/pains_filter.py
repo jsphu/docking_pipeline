@@ -26,6 +26,15 @@ def apply_pains_filter(input_csv, output_csv):
         mol = Chem.MolFromSmiles(smiles)
 
         if mol:
+            # Fix radicals and re-sanitize before checking for PAINS
+            for atom in mol.GetAtoms():
+                atom.SetNumRadicalElectrons(0)
+                atom.SetNoImplicit(False)
+            try:
+                Chem.SanitizeMol(mol)
+            except:
+                pass
+            
             # Check for PAINS matches
             if catalog.HasMatch(mol):
                 pains_count += 1

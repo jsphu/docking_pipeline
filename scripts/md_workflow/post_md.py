@@ -6,8 +6,8 @@ import shutil
 from src.config_loader import load_config
 from src.gmx_utils import run_gmx, run_command
 from src.logger_utils import setup_logger
-from src.plotting import plot_xvg
-from src.report_utils import generate_html_report
+from src.plotting import plot_xvg, get_xvg_stats
+from src.report_utils import generate_html_report, generate_master_report
 
 # Setup Logger
 setup_logger()
@@ -84,12 +84,38 @@ def analyze_complex(complex_name, outdir, workdir, cfg, args):
     
     if not os.path.exists(tpr) or not os.path.exists(xtc):
         logger.warning(f"Skipping {complex_name}: Production MD files (tpr/xtc) missing in {outdir}.")
-        return
+        return None
 
     analysis_dir = os.path.join(outdir, f"analysis_{complex_name}")
     os.makedirs(analysis_dir, exist_ok=True)
     
     plots_collected = {}
+
+    # Helper to run and collect
+    def run_analysis(tool, input_flags, output_file, stdin, plot_title):
+        out_path = os.path.join(analysis_dir, output_file)
+        plot_path = out_path.replace(".xvg", ".png")
+        if not os.path.exists(out_path):
+            logger.info(f"Calculating {plot_title} for {complex_name}...")
+            # Prepare output flag based on tool
+            output_flags = {"-o": out_path}
+            if tool == "hbond":
+                output_flags = {"-num": out_path}
+            
+            run_gmx(
+                [tool],
+                input_files=input_flags,
+                output_files=output_flags,
+                stdin=stdin,
+                use_docker=args.docker,
+                image=args.image,
+                host_root=args.host_root,
+                cwd=workdir,
+            )
+            plot_xvg(out_path, plot_path)
+        
+        stats = get_xvg_stats(out_path)
+        plots_collected[plot_title] = {"path": plot_path, "stats": stats}
 
     # 1. PBC Treatment: NoPBC and Fitted Trajectories
     # We center on Protein and output System
@@ -126,95 +152,17 @@ def analyze_complex(complex_name, outdir, workdir, cfg, args):
     logger.info(f"Identified Ligand Group: {lig_group}")
 
     # 2. RMSD Analysis
-    # Protein Backbone
-    rmsd_prot = os.path.join(analysis_dir, "rmsd_protein.xvg")
-    rmsd_prot_plot = rmsd_prot.replace(".xvg", ".png")
-    if not os.path.exists(rmsd_prot):
-        logger.info(f"Calculating Protein RMSD for {complex_name}...")
-        run_gmx(
-            ["rms", "-tu", "ns"],
-            input_files={"-f": fitted_xtc, "-s": tpr},
-            output_files={"-o": rmsd_prot},
-            stdin="Backbone\nBackbone\n",
-            use_docker=args.docker,
-            image=args.image,
-            host_root=args.host_root,
-            cwd=workdir,
-        )
-        plot_xvg(rmsd_prot, rmsd_prot_plot)
-    plots_collected["Protein RMSD"] = rmsd_prot_plot
+    run_analysis("rms", {"-f": fitted_xtc, "-s": tpr, "-tu": "ns"}, "rmsd_protein.xvg", "Backbone\nBackbone\n", "Protein RMSD")
+    run_analysis("rms", {"-f": fitted_xtc, "-s": tpr, "-tu": "ns"}, "rmsd_ligand.xvg", "Backbone\n" + f"{lig_group}\n", "Ligand RMSD")
 
-    # Ligand RMSD (Fit to Backbone)
-    rmsd_lig = os.path.join(analysis_dir, "rmsd_ligand.xvg")
-    rmsd_lig_plot = rmsd_lig.replace(".xvg", ".png")
-    if not os.path.exists(rmsd_lig):
-        logger.info(f"Calculating Ligand RMSD for {complex_name}...")
-        run_gmx(
-            ["rms", "-tu", "ns"],
-            input_files={"-f": fitted_xtc, "-s": tpr},
-            output_files={"-o": rmsd_lig},
-            stdin="Backbone\n" + f"{lig_group}\n",
-            use_docker=args.docker,
-            image=args.image,
-            host_root=args.host_root,
-            cwd=workdir,
-        )
-        plot_xvg(rmsd_lig, rmsd_lig_plot)
-    plots_collected["Ligand RMSD"] = rmsd_lig_plot
+    # 3. RMSF Analysis
+    run_analysis("rmsf", {"-f": fitted_xtc, "-s": tpr, "-res": ""}, "rmsf_protein.xvg", "C-alpha\n", "Protein RMSF")
 
-    # 3. RMSF Analysis (Protein C-alpha)
-    rmsf_prot = os.path.join(analysis_dir, "rmsf_protein.xvg")
-    rmsf_prot_plot = rmsf_prot.replace(".xvg", ".png")
-    if not os.path.exists(rmsf_prot):
-        logger.info(f"Calculating Protein RMSF for {complex_name}...")
-        run_gmx(
-            ["rmsf", "-res"],
-            input_files={"-f": fitted_xtc, "-s": tpr},
-            output_files={"-o": rmsf_prot},
-            stdin="C-alpha\n",
-            use_docker=args.docker,
-            image=args.image,
-            host_root=args.host_root,
-            cwd=workdir,
-        )
-        plot_xvg(rmsf_prot, rmsf_prot_plot)
-    plots_collected["Protein RMSF"] = rmsf_prot_plot
+    # 4. Radius of Gyration
+    run_analysis("gyrate", {"-f": fitted_xtc, "-s": tpr}, "rg_protein.xvg", "Backbone\n", "Radius of Gyration")
 
-    # 4. Radius of Gyration (Protein Backbone)
-    rg_prot = os.path.join(analysis_dir, "rg_protein.xvg")
-    rg_prot_plot = rg_prot.replace(".xvg", ".png")
-    if not os.path.exists(rg_prot):
-        logger.info(f"Calculating Radius of Gyration for {complex_name}...")
-        run_gmx(
-            ["gyrate"],
-            input_files={"-f": fitted_xtc, "-s": tpr},
-            output_files={"-o": rg_prot},
-            stdin="Backbone\n",
-            use_docker=args.docker,
-            image=args.image,
-            host_root=args.host_root,
-            cwd=workdir,
-        )
-        plot_xvg(rg_prot, rg_prot_plot)
-    plots_collected["Radius of Gyration"] = rg_prot_plot
-
-    # 5. Hydrogen Bonds (Protein - Ligand)
-    hbonds = os.path.join(analysis_dir, "hbonds.xvg")
-    hbonds_plot = hbonds.replace(".xvg", ".png")
-    if not os.path.exists(hbonds):
-        logger.info(f"Calculating Hydrogen Bonds for {complex_name}...")
-        run_gmx(
-            ["hbond"],
-            input_files={"-f": fitted_xtc, "-s": tpr},
-            output_files={"-num": hbonds},
-            stdin="Protein\n" + f"{lig_group}\n",
-            use_docker=args.docker,
-            image=args.image,
-            host_root=args.host_root,
-            cwd=workdir,
-        )
-        plot_xvg(hbonds, hbonds_plot)
-    plots_collected["Hydrogen Bonds"] = hbonds_plot
+    # 5. Hydrogen Bonds
+    run_analysis("hbond", {"-f": fitted_xtc, "-s": tpr}, "hbonds.xvg", "Protein\n" + f"{lig_group}\n", "Hydrogen Bonds")
 
     # Generate HTML Report
     metadata = {
@@ -224,10 +172,19 @@ def analyze_complex(complex_name, outdir, workdir, cfg, args):
         "Ligand Group": lig_group,
         "Complex Name": complex_name
     }
-    report_path = generate_html_report(complex_name, analysis_dir, plots_collected, metadata)
+    # For individual report, we need to pass a dict of title -> path
+    legacy_plots = {k: v["path"] for k, v in plots_collected.items()}
+    report_path = generate_html_report(complex_name, analysis_dir, legacy_plots, metadata)
     logger.info(f"Report generated: {report_path}")
 
     logger.info(f"Completed Analysis for {complex_name}. Results in {analysis_dir}")
+    
+    return {
+        "complex_name": complex_name,
+        "analysis_dir": analysis_dir,
+        "plots": plots_collected,
+        "metadata": metadata
+    }
 
 def main():
     parser = argparse.ArgumentParser(
@@ -304,9 +261,16 @@ def main():
     original_cwd = os.getcwd()
     os.chdir(workdir)
     
+    all_results = []
     try:
         for comp in complexes:
-            analyze_complex(comp, outdir, workdir, cfg, args)
+            res = analyze_complex(comp, outdir, workdir, cfg, args)
+            if res:
+                all_results.append(res)
+        
+        if all_results:
+            master_report = generate_master_report(all_results, outdir)
+            logger.info(f"--- Master Comparison Report Generated: {master_report} ---")
     finally:
         os.chdir(original_cwd)
 

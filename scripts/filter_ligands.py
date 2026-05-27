@@ -86,11 +86,16 @@ def main():
             continue
 
         # Fix the "radical" issue common in some explicit SMILES exports
+        # and ensure aromaticity is re-perceived correctly.
         for atom in mol.GetAtoms():
             atom.SetNumRadicalElectrons(0)
             atom.SetNoImplicit(False)
         try:
+            # We remove Hs to get a clean organic SMILES for property calculation
+            mol = Chem.RemoveHs(mol)
             Chem.SanitizeMol(mol)
+            # Update SMILES to the cleaned version
+            smiles = Chem.MolToSmiles(mol, canonical=True)
         except:
             if args.verbose:
                 print(f"Skipping {ligand_id}: Sanitization failed")

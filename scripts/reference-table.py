@@ -34,12 +34,22 @@ for root, dirs, files in os.walk(base_dir):
             )
 
             try:
-                # Read the PDBQT file (taking the first model/frame)
-                mol = next(pybel.readfile("pdbqt", file_path))
-
-                # Convert to SMILES (canonical, stripped of coordinates)
+                # Read the PDBQT file
+                ob_mol = next(pybel.readfile("pdbqt", file_path)).OBMol
+                
+                # Robust bond perception for docked/relaxed poses
+                ob_mol.DeleteHydrogens()
+                ob_mol.PerceiveBondOrders()
+                ob_mol.AddHydrogens()  # Fill valencies correctly
+                
+                # Use a intermediate SDF to help transfer chemistry to RDKit if needed,
+                # but for now, canonical SMILES from OB with aromaticity perception
+                mol = pybel.Molecule(ob_mol)
                 smiles = mol.write("can").strip().split()[0]
 
+                # Secondary check: if it looks like "junk" SMILES (lots of [C]), 
+                # we could further process it with RDKit, but let s start with this.
+                
                 results.append(
                     {
                         "path-name": path_name.upper(),

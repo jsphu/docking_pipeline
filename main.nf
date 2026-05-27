@@ -1,18 +1,68 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
+params.help           = false
+
+// --- Help Message ---
+def helpMessage() {
+    log.info"""
+    Usage:
+      nextflow run main.nf [options]
+
+    Main Options:
+      --receptor           [path]  Path to the receptor file (PDB, PDBQT, etc.). Default: ${params.receptor}
+      --ligands            [path]  Path to ligand file(s) (SMILES, SDF, PDB, PDBQT). Supports globs.
+      --outdir             [path]  The output directory where results will be saved. Default: ${params.outdir}
+
+    Input Handling:
+      --skip_download      [bool]  Skip downloading from ZINC and use local files. Default: ${params.skip_download}
+      --smiles_file        [path]  Local SMILES file (deprecated, use --ligands).
+      --pdbqt_file         [path]  Local PDBQT file (deprecated, use --ligands).
+      --sdf_file           [path]  Local SDF file (deprecated, use --ligands).
+      --one_pdbqt          [bool]  Set to true if input is a single-ligand PDBQT (no splitting). Default: ${params.one_pdbqt}
+      --chunk_size         [int]   Number of lines per chunk when splitting SMILES/SDF. Default: ${params.chunk_size}
+
+    Docking Configuration:
+      --use_gpu            [bool]  Use QuickVina-GPU for docking. Default: ${params.use_gpu}
+      --exhaustiveness     [int]   Vina exhaustiveness parameter. Default: ${params.exhaustiveness}
+      --center_x/y/z       [float] Coordinates of the grid box center.
+      --size_x/y/z         [float] Dimensions of the grid box.
+      --num_modes          [int]   Maximum number of binding modes to generate. Default: ${params.num_modes}
+      --energy_range       [float] Maximum energy difference between the best and worst modes (kcal/mol). Default: ${params.energy_range}
+
+    Filtering & Analysis:
+      --run_filtering      [bool]  Run post-docking analysis (PAINS, Properties, BOILED-Egg). Default: ${params.run_filtering}
+      --rules_file         [path]  TOML file containing filtering rules. Default: ${params.rules_file}
+
+    GPU Specifics:
+      --collate_size       [int]   Number of ligands to batch per GPU task. Default: ${params.collate_size}
+      --thread_size        [int]   Thread size for GPU docking. Default: ${params.thread_size}
+
+    Other:
+      --override           [bool]  Overwrite existing results in the output directory. Default: ${params.override}
+      --help                       Show this message.
+    """.stripIndent()
+}
+
+if (params.help) {
+    helpMessage()
+    exit 0
+}
+
 include { DOCKING }                     from './src/docking/vina.nf'
 include { DOCKING_GPU }                 from './src/docking/quickvina-gpu.nf'
 include { DOWNLOAD_SMILES }             from './src/downloader/downloadSmiles.nf'
-include { SPLIT_SMILES }                from './src/converter/splitSmiles.nf'
 include { DOWNLOAD_PDBQT_AND_UNZIP }    from './src/downloader/downloadPdbqtAndUnzip.nf'
-include { SPLIT_PDBQT }                 from './src/converter/splitPdbqt.nf'
-include { OBABEL_CONVERT_SMILES }       from './src/converter/obabelConvertSmiles.nf'
+include { PREPARE_PROTEIN }             from './src/preparation/protein.nf'
+include { PREPARE_LIGANDS }             from './src/preparation/ligand.nf'
+include { SPLIT_INPUT }                 from './src/preparation/split.nf'
+include { COLLECT_RESULTS; EXTRACT_SMILES; FILTER_LIGANDS; PAINS_FILTER; BOILED_EGG } from './src/filtering/filtering.nf'
 
 workflow {
     def docking_config = [ center_x: params.center_x, center_y: params.center_y, center_z: params.center_z, size_x: params.size_x, size_y: params.size_y, size_z: params.size_z, exhaustiveness: params.exhaustiveness, num_modes: params.num_modes, energy_range: params.energy_range, thread_size: params.thread_size ]
 
-    receptor_file = file(params.receptor)
+    prepared_receptor_ch = PREPARE_PROTEIN(channel.fromPath(params.receptor))
+    receptor_file_ch = prepared_receptor_ch.collect()
 
     links_ch = get_links_channel()
 
@@ -26,19 +76,21 @@ workflow {
         ligands_ch = main_ch
             | flatten
             | map { f -> [f.baseName.replaceAll('_', '-').toUpperCase(), f] }
-    } else if (params.use3d_downloader || params.pdbqt_file) {
-        ligands_ch = main_ch
-            | map { f -> [ f.baseName.replaceAll('_', '-').toUpperCase(), f ] }
-            | SPLIT_PDBQT 
-            | transpose
     } else {
-        ligands_ch = main_ch
-            | SPLIT_SMILES 
-            | flatten 
-            | OBABEL_CONVERT_SMILES 
-            | flatten
+        raw_ligands_ch = main_ch
             | map { f -> [f.baseName.replaceAll('_', '-').toUpperCase(), f] }
+            | branch {
+                splitable: it[1].extension == 'smi' || it[1].extension == 'smiles' || it[1].extension == 'txt' || it[1].extension == 'sdf'
+                other: true
+            }
+
+        split_ch = SPLIT_INPUT(raw_ligands_ch.splitable) | transpose
+        
+        ligands_ch = split_ch.mix(raw_ligands_ch.other)
+            | PREPARE_LIGANDS
+            | transpose
     } 
+
     if (params.use_gpu) {
         ligands_ch
             .groupTuple()
@@ -47,19 +99,32 @@ workflow {
             }
             .set { gpu_batches_ch }
 
-        DOCKING_GPU(
+        docking_output_ch = DOCKING_GPU(
             gpu_batches_ch,
-            receptor_file,
+            receptor_file_ch,
             docking_config
-        )
+        ).docked_files
       } else {
-          DOCKING(
+          docking_output_ch = DOCKING(
               ligands_ch,
-              receptor_file,
+              receptor_file_ch,
               docking_config,
               params.override
           )
       }
+
+    if (params.run_filtering) {
+        scores_csv_ch = COLLECT_RESULTS(docking_output_ch.collect())
+        
+        // Extract SMILES from the prepared ligands for property calculation
+        smiles_csv_ch = EXTRACT_SMILES(ligands_ch.map{it[1]}.collect())
+
+        rules_toml = file(params.rules_file)
+
+        filtered_ch = FILTER_LIGANDS(smiles_csv_ch, scores_csv_ch, rules_toml)
+        pains_free_ch = PAINS_FILTER(filtered_ch.csv)
+        BOILED_EGG(pains_free_ch.csv)
+    }
 }
 
 def get_links_channel() {
@@ -71,9 +136,11 @@ def get_links_channel() {
 }
 // --- Helper Function ---
 def get_local_channel() {
+    if (params.ligands)     return channel.fromPath(params.ligands)
     if (params.smiles_file) return channel.fromPath(params.smiles_file)
     if (params.pdbqt_file)  return channel.fromPath(params.pdbqt_file)
-    error "Missing input: Please provide --smiles_file or --pdbqt_file when using --skip_download"
+    if (params.sdf_file)    return channel.fromPath(params.sdf_file)
+    error "Missing input: Please provide --ligands, --smiles_file, --pdbqt_file, or --sdf_file when using --skip_download"
 }
 
 // --- Default Parameters ---
@@ -82,9 +149,13 @@ params.links_file       = 'data/ZINC-downloader-2D-txt.uri'
 params.chunk_size       = 200
 params.use3d_downloader = false
 params.skip_download    = false
+params.ligands          = ''
 params.smiles_file      = ''
 params.pdbqt_file       = ''
+params.sdf_file         = ''
 params.one_pdbqt        = false
+params.run_filtering    = false
+params.rules_file       = 'scripts/rules.toml'
 params.use_gpu          = false
 params.thread_size      = 8000
 params.collate_size     = 100

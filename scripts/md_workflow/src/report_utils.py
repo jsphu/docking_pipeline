@@ -136,3 +136,135 @@ def generate_html_report(complex_name, analysis_dir, plots, metadata=None):
         f.write(html_content)
     
     return report_path
+
+def generate_master_report(results, output_dir):
+    """
+    Generates a master HTML report comparing all analyzed complexes.
+    results: List of dicts {complex_name, analysis_dir, plots, metadata}
+    """
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>MD Analysis Master Report</title>
+        <style>
+            body {{ font-family: 'Segoe UI', sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background-color: #f0f2f5; }}
+            .container {{ max-width: 1200px; margin: 0 auto; }}
+            header {{ background: #1a2a6c; color: white; padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+            .summary-card {{ background: white; padding: 25px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }}
+            h2 {{ color: #1a2a6c; border-bottom: 3px solid #f27121; padding-bottom: 10px; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }}
+            th, td {{ padding: 15px; text-align: left; border-bottom: 1px solid #eee; }}
+            th {{ background-color: #f8f9fa; color: #1a2a6c; font-weight: 600; }}
+            tr:hover {{ background-color: #f1f4f9; }}
+            .plot-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 20px; margin-top: 20px; }}
+            .plot-card {{ background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; }}
+            .plot-card img {{ max-width: 100%; height: auto; border-radius: 5px; }}
+            .plot-card h3 {{ margin-top: 10px; font-size: 1.1em; color: #2c3e50; }}
+            .badge {{ padding: 4px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold; background: #e9ecef; }}
+            .footer {{ text-align: center; margin-top: 50px; padding: 20px; color: #666; font-size: 0.9em; }}
+            .metric {{ font-family: monospace; font-weight: bold; color: #e67e22; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <h1>MD Analysis Master Comparison Report</h1>
+                <p>Generated on: {now}</p>
+            </header>
+
+            <div class="summary-card">
+                <h2>Comparison Summary</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Complex Name</th>
+                            <th>Ligand Group</th>
+                            <th>Avg Protein RMSD (nm)</th>
+                            <th>Avg Ligand RMSD (nm)</th>
+                            <th>Avg H-Bonds</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    """
+
+    for res in results:
+        comp = res["complex_name"]
+        plots = res["plots"]
+        meta = res["metadata"]
+        
+        # Extract stats safely
+        p_rmsd = plots.get("Protein RMSD", {}).get("stats")
+        l_rmsd = plots.get("Ligand RMSD", {}).get("stats")
+        hbonds = plots.get("Hydrogen Bonds", {}).get("stats")
+        
+        p_rmsd_val = f"{p_rmsd[0]['mean']:.3f}" if p_rmsd and p_rmsd[0] else "N/A"
+        l_rmsd_val = f"{l_rmsd[0]['mean']:.3f}" if l_rmsd and l_rmsd[0] else "N/A"
+        hbonds_val = f"{hbonds[0]['mean']:.1f}" if hbonds and hbonds[0] else "N/A"
+        
+        html_content += f"""
+                        <tr>
+                            <td><strong>{comp}</strong></td>
+                            <td><span class="badge">{meta.get('Ligand Group', 'N/A')}</span></td>
+                            <td><span class="metric">{p_rmsd_val}</span></td>
+                            <td><span class="metric">{l_rmsd_val}</span></td>
+                            <td><span class="metric">{hbonds_val}</span></td>
+                        </tr>
+        """
+
+    html_content += """
+                    </tbody>
+                </table>
+            </div>
+    """
+
+    # Group plots by type
+    plot_types = ["Protein RMSD", "Ligand RMSD", "Hydrogen Bonds", "Protein RMSF", "Radius of Gyration"]
+    
+    for ptype in plot_types:
+        # Check if at least one result has this plot type
+        has_plot = any(ptype in res["plots"] for res in results)
+        if not has_plot:
+            continue
+            
+        html_content += f"""
+            <div class="summary-card">
+                <h2>{ptype} Comparison</h2>
+                <div class="plot-grid">
+        """
+        
+        for res in results:
+            if ptype in res["plots"]:
+                pdata = res["plots"][ptype]
+                b64_img = image_to_base64(pdata["path"])
+                if b64_img:
+                    html_content += f"""
+                    <div class="plot-card">
+                        <h3>{res['complex_name']}</h3>
+                        <img src="{b64_img}" alt="{ptype} - {res['complex_name']}">
+                    </div>
+                    """
+        
+        html_content += """
+                </div>
+            </div>
+        """
+
+    html_content += """
+            <div class="footer">
+                <p>Generated by MD Workflow Suite - Master Report Utility</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    report_path = os.path.join(output_dir, "master_analysis_report.html")
+    with open(report_path, "w") as f:
+        f.write(html_content)
+    
+    return report_path

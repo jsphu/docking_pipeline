@@ -12,10 +12,14 @@ def clean_and_fix_smiles(smiles):
             return None
 
         # Fix the "radical" issue common in some explicit SMILES exports
+        # If OB failed to kekulize, it might leave atoms as radicals
         for atom in mol.GetAtoms():
             atom.SetNumRadicalElectrons(0)
             atom.SetNoImplicit(False)
 
+        # Remove explicit hydrogens to allow RDKit to fill them correctly based on valency
+        mol = Chem.RemoveHs(mol)
+        
         # Re-sanitize to update valency and implicit hydrogens
         Chem.SanitizeMol(mol)
 

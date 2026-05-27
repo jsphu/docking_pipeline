@@ -34,6 +34,26 @@ def clean_molecule(smiles, add_hs=True, generate_3d=True, minimize=True):
     return mol
 
 
+def fix_smiles(smiles):
+    """Removes common radical notations and other issues from poorly perceived SMILES."""
+    if not smiles:
+        return smiles
+    # Remove radical markers [C], [N], etc. but keep brackets for things like [nH]
+    bad_markers = ["[C]", "[N]", "[O]", "[S]", "[F]", "[Cl]", "[Br]", "[I]", "[c]", "[n]", "[o]"]
+    fixed = smiles
+    for m in bad_markers:
+        fixed = fixed.replace(m, m[1])
+
+    # Try to sanitize with RDKit
+    try:
+        mol = Chem.MolFromSmiles(fixed)
+        if mol:
+            return Chem.MolToSmiles(mol)
+    except:
+        pass
+    return fixed
+
+
 def prepare_ligand(ligand_name, smiles, output_dir, run_command_func):
     """
     Prepares ligand topology using RDKit for 3D prep and acpype for GMX topology.
@@ -41,7 +61,9 @@ def prepare_ligand(ligand_name, smiles, output_dir, run_command_func):
     os.makedirs(output_dir, exist_ok=True)
 
     try:
-        mol = clean_molecule(smiles)
+        clean_smi = fix_smiles(smiles)
+        mol = clean_molecule(clean_smi)
+        charge = Chem.GetFormalCharge(mol)
     except Exception as e:
         logger.error(f"Error cleaning molecule {ligand_name}: {e}")
         return None, None
@@ -57,7 +79,7 @@ def prepare_ligand(ligand_name, smiles, output_dir, run_command_func):
             "-c",
             "bcc",
             "-n",
-            "0",
+            str(charge),
             "-a",
             "gaff2",
             "-b",
@@ -66,6 +88,7 @@ def prepare_ligand(ligand_name, smiles, output_dir, run_command_func):
         cwd=output_dir,
     ):
         return None, None
+    ...
 
     acpype_out_dir = os.path.join(output_dir, f"{ligand_name}.acpype")
     itp_file = os.path.abspath(os.path.join(acpype_out_dir, f"{ligand_name}_GMX.itp"))
@@ -124,20 +147,19 @@ def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func, smiles=N
 
     # 1. Get SMILES for correct bond orders
     if smiles:
-        clean_smi = smiles
+        clean_smi = fix_smiles(smiles)
     else:
         # We use pdbqt_to_smiles and then clean it of radicals []
         raw_smiles = pdbqt_to_smiles(ligand_file, workdir=output_dir)
         if not raw_smiles:
             logger.error(f"Error: Could not get SMILES from {ligand_file}")
             return None, None
-
-        # Clean SMILES (remove brackets ONLY if they surround a single atom like [C])
-        # A more robust way is to use RDKit to sanitize if possible,
-        # but here we just try to remove common radical notations from obabel
-        clean_smi = raw_smiles.replace("[C]", "C").replace("[n]", "n").replace("[o]", "o")
+        clean_smi = fix_smiles(raw_smiles)
     
     template = Chem.MolFromSmiles(clean_smi)
+    charge = 0
+    if template:
+        charge = Chem.GetFormalCharge(template)
     if not template and not smiles:
         # Try a more aggressive clean if it failed and we don't have a trusted SMILES
         clean_smi_aggressive = clean_smi.replace("[", "").replace("]", "")
@@ -198,13 +220,24 @@ def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func, smiles=N
             
             # Load the distorted pose for alignment (as many atoms as we can get)
             pose_raw = Chem.MolFromPDBFile(heavy_pdb, proximityBonding=False, sanitize=False)
-            if pose_raw and fresh_mol.GetNumHeavyAtoms() == pose_raw.GetNumAtoms():
-                # Rigid alignment of the valid structure to the docked coordinates
-                # This keeps the chemical bonds correct but puts atoms near the dock pose
-                AllChem.AlignMol(fresh_mol, pose_raw)
-                logger.info(f"Successfully aligned fresh structure to pose for {ligand_name}")
-            else:
-                logger.warning(f"Could not align {ligand_name} (atom count mismatch). Using fresh conformation only.")
+            if pose_raw:
+                # Use heavy atoms only for alignment
+                fresh_heavy = Chem.RemoveHs(fresh_mol)
+                if fresh_heavy.GetNumAtoms() == pose_raw.GetNumAtoms():
+                    # Get the mapping between fresh structure and pose
+                    # Since they should have the same atom order if generated from same SMILES/PDBQT
+                    # but obabel might have changed it. Better to use GetSubstructMatch.
+                    match = fresh_heavy.GetSubstructMatch(pose_raw)
+                    if not match:
+                        # Fallback to simple order-based alignment if substruct match fails
+                        # but count matches
+                        match = list(range(fresh_heavy.GetNumAtoms()))
+                    
+                    atom_map = [(i, match[i]) for i in range(len(match))]
+                    AllChem.AlignMol(fresh_mol, pose_raw, atomMap=atom_map)
+                    logger.info(f"Successfully aligned fresh structure to pose for {ligand_name}")
+                else:
+                    logger.warning(f"Could not align {ligand_name} (atom count mismatch: {fresh_heavy.GetNumAtoms()} vs {pose_raw.GetNumAtoms()}). Using fresh conformation only.")
             
             fixed_mol = fresh_mol
             final_input = os.path.join(output_dir, f"{ligand_name}_aligned.pdb")
@@ -225,7 +258,7 @@ def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func, smiles=N
             "-c",
             "bcc",
             "-n",
-            "0",
+            str(charge),
             "-a",
             "gaff2",
             "-b",

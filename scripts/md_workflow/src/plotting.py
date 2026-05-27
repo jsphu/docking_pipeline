@@ -63,3 +63,40 @@ def plot_xvg(file_path, output_path=None):
         plt.close()
     else:
         plt.show()
+
+def get_xvg_stats(file_path):
+    """Parses XVG and returns basic stats (mean, std, max, min) for each Y column."""
+    y_data = []
+    if not os.path.exists(file_path):
+        return None
+
+    with open(file_path) as f:
+        for line in f:
+            if line.startswith(("#", "@")):
+                continue
+            cols = line.split()
+            if len(cols) >= 2:
+                try:
+                    y_values = [float(v) for v in cols[1:]]
+                    if not y_data:
+                        y_data = [[] for _ in range(len(y_values))]
+                    for i, val in enumerate(y_values):
+                        y_data[i].append(val)
+                except ValueError:
+                    continue
+    
+    if not y_data:
+        return None
+    
+    stats_list = []
+    for data in y_data:
+        if not data:
+            stats_list.append(None)
+            continue
+        stats_list.append({
+            "mean": np.mean(data),
+            "std": np.std(data),
+            "max": np.max(data),
+            "min": np.min(data)
+        })
+    return stats_list

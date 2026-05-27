@@ -103,11 +103,13 @@ def clean_protein(input_file, output_file):
     for l in lines:
         if l.startswith("ATOM"):
             try:
-                rn = int(l[22:26].strip())
+                rn_str = l[22:27].strip() # Include insertion code in identity
                 rnm = l[17:20].strip()
-                if rn != curr_rn:
-                    residues.append({"rn": rn, "rnm": rnm, "lines": []})
-                    curr_rn = rn
+                if rnm not in REQS:
+                    continue
+                if rn_str != curr_rn:
+                    residues.append({"rn": rn_str, "rnm": rnm, "lines": []})
+                    curr_rn = rn_str
                 residues[-1]["lines"].append(l)
             except:
                 pass
@@ -117,7 +119,13 @@ def clean_protein(input_file, output_file):
     for r in residues:
         # Check if residue is complete and NOT in the known bad list
         req = REQS.get(r["rnm"], 4)
-        if len(r["lines"]) >= req and r["rn"] not in [
+        # Extract numeric part of rn for distance check
+        try:
+            rn_num = int("".join(filter(str.isdigit, r["rn"])))
+        except:
+            rn_num = 0
+
+        if len(r["lines"]) >= req and rn_num not in [
             143,
             153,
             192,
@@ -126,12 +134,19 @@ def clean_protein(input_file, output_file):
             399,
             626,
         ]:
-            if not curr_is or r["rn"] - curr_is[-1]["rn"] == 1:
+            if not curr_is:
                 curr_is.append(r)
             else:
-                if len(curr_is) >= 10:
-                    islands.append(curr_is)
-                curr_is = [r]
+                try:
+                    prev_rn_num = int("".join(filter(str.isdigit, curr_is[-1]["rn"])))
+                    if rn_num - prev_rn_num == 1:
+                        curr_is.append(r)
+                    else:
+                        if len(curr_is) >= 10:
+                            islands.append(curr_is)
+                        curr_is = [r]
+                except:
+                    curr_is = [r]
         else:
             if len(curr_is) >= 10:
                 islands.append(curr_is)
@@ -374,31 +389,21 @@ def setup_system(
         cwd=workdir,
     ):
         raise RuntimeError("genion failed")
-    final = os.path.abspath(os.path.join(workdir, f"{output_prefix}_final.gro"))
-    if not run_gmx(
-        ["genion", "-pname", "NA", "-nname", "CL", "-neutral"],
-        input_files={"-s": tpr, "-p": protein_top},
-        output_files={"-o": final},
-        stdin="SOL\n",
-        use_docker=use_docker,
-        image=image,
-        host_root=host_root,
-        cwd=workdir,
-    ):
-        raise RuntimeError("genion failed")
     return final
 
 
 def prepare_protein(protein_input, workdir):
     pid = os.path.splitext(os.path.basename(protein_input))[0]
+    pdb = protein_input
     if protein_input.endswith(".pdbqt"):
         pdb = os.path.join(workdir, f"{pid}.pdb")
-        if pdbqt_to_pdb(protein_input, pdb):
-            cpdb = os.path.join(workdir, f"{pid}_cleaned.pdb")
-            if clean_protein(pdb, cpdb):
-                return cpdb, pid
-            return pdb, pid
-    return protein_input, pid
+        if not pdbqt_to_pdb(protein_input, pdb):
+            return protein_input, pid
+    
+    cpdb = os.path.join(workdir, f"{pid}_cleaned.pdb")
+    if clean_protein(pdb, cpdb):
+        return cpdb, pid
+    return pdb, pid
 
 
 def handle_posre(top, work, name):
