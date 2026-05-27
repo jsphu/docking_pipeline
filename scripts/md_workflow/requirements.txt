@@ -1,0 +1,8 @@
+numpy>=1.22.0
+pandas>=1.4.0
+biopython>=1.79
+rdkit>=2022.03.1
+docker>=5.0.3
+requests>=2.27.1
+scipy>=1.8.0
+matplotlib>=3.5.1

@@ -1,0 +1,7 @@
+#/usr/bin/env bash
+conda create -n acpype_env -c conda-forge acpype
+conda install -c conda-forge acpype
+pip install acpype
+sudo apt install openbabel -y
+
+acpype -h

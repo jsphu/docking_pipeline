@@ -16,4 +16,5 @@ __pycache__
 
 data/
 data*/
+data*
 .trash/
