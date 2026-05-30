@@ -4,6 +4,8 @@ import glob
 import sys
 import shutil
 import difflib
+import tarfile
+import requests
 from src.config_loader import load_config
 from src.gmx_utils import run_gmx, run_command
 from src.logger_utils import setup_logger
@@ -13,6 +15,31 @@ from src.report_utils import generate_html_report, generate_master_report
 # Setup Logger
 setup_logger()
 logger = setup_logger("post_md")
+
+def zip_results(outdir, zip_name):
+    """Zips the output directory."""
+    logger.info(f"Zipping results in {outdir} to {zip_name}...")
+    with tarfile.open(zip_name, "w:gz") as tar:
+        tar.add(outdir, arcname=os.path.basename(outdir))
+    return zip_name
+
+def upload_to_transfer_sh(file_path):
+    """Uploads a file to transfer.sh and returns the download link."""
+    file_name = os.path.basename(file_path)
+    logger.info(f"Uploading {file_name} to transfer.sh...")
+    try:
+        with open(file_path, 'rb') as f:
+            response = requests.put(f"https://transfer.sh/{file_name}", data=f)
+            if response.status_code == 200:
+                download_link = response.text.strip()
+                logger.info(f"Upload successful! Download link: {download_link}")
+                print(f"DOWNLOAD_LINK={download_link}")
+                return download_link
+            else:
+                logger.error(f"Upload failed with status code {response.status_code}: {response.text}")
+    except Exception as e:
+        logger.error(f"An error occurred during upload: {e}")
+    return None
 
 def get_files(path, extensions):
     """Retrieves files from a path or directory with specific extensions."""
@@ -351,6 +378,16 @@ def main():
             logger.info(f"--- Master Comparison Report Generated: {final_path} ---")
         else:
             logger.warning("No results collected for master report.")
+
+        # ZIP and UPLOAD
+        zip_file = os.path.join(os.path.dirname(outdir), "simulation_results.tar.gz")
+        zip_results(outdir, zip_file)
+        upload_to_transfer_sh(zip_file)
+
+        logger.info("--- WORKFLOW COMPLETE ---")
+        logger.info("--- Post-MD Analysis and Upload Successful. Terminating Container... ---")
+        sys.exit(0)
+
     finally:
         os.chdir(original_cwd)
 

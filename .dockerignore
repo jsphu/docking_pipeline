@@ -1,0 +1,31 @@
+# Base patterns from .gitignore
+work/
+results/
+results*
+.nextflow/
+.nextflow*
+**/__pycache__/
+data/
+data*/
+data*
+.trash/
+
+# Explicitly ignore results inside the workflow directory
+scripts/md_workflow/results*/
+scripts/md_workflow/work/
+
+# Ignore everything in the workflow data directory
+scripts/md_workflow/data/*
+
+# Allow only these specific files
+!scripts/md_workflow/data/6NJS-1.json
+!scripts/md_workflow/data/6NJS-2.json
+!scripts/md_workflow/data/6NJS.pdb
+
+# Allow the leads directory but ignore its contents by default
+!scripts/md_workflow/data/leads/
+scripts/md_workflow/data/leads/*
+
+# Allow only the two specific ligands required for 6NJS
+!scripts/md_workflow/data/leads/6NJS_COMBINED-SCREENED-MOLECULES-35019-LOW_27420.pdbqt
+!scripts/md_workflow/data/leads/6NJS_COMBINED-SCREENED-MOLECULES-35019-LOW_27587.pdbqt
