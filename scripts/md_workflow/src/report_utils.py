@@ -2,18 +2,20 @@ import os
 import base64
 from datetime import datetime
 
+
 def image_to_base64(image_path):
     """Converts an image file to a base64 string."""
     if not os.path.exists(image_path):
         return ""
     with open(image_path, "rb") as image_file:
-        encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+        encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
         ext = os.path.splitext(image_path)[1][1:]
         return f"data:image/{ext};base64,{encoded_string}"
 
+
 def generate_html_report(complex_name, analysis_dir, plots, metadata=None):
     """Generates a standalone HTML report for the MD analysis."""
-    
+
     html_content = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -92,20 +94,22 @@ def generate_html_report(complex_name, analysis_dir, plots, metadata=None):
         <header>
             <h1>Molecular Dynamics Analysis Report</h1>
             <p>Complex: <strong>{complex_name}</strong></p>
-            <p>Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            <p>Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
         </header>
 
         <div class="card">
             <h2>System Information</h2>
             <table class="metadata-table">
     """
-    
+
     if metadata:
         for key, value in metadata.items():
             html_content += f"<tr><th>{key}</th><td>{value}</td></tr>"
     else:
-        html_content += f"<tr><th>Status</th><td>Analysis completed successfully</td></tr>"
-        
+        html_content += (
+            f"<tr><th>Status</th><td>Analysis completed successfully</td></tr>"
+        )
+
     html_content += """
             </table>
         </div>
@@ -134,16 +138,19 @@ def generate_html_report(complex_name, analysis_dir, plots, metadata=None):
     report_path = os.path.join(analysis_dir, f"report_{complex_name}.html")
     with open(report_path, "w") as f:
         f.write(html_content)
-    
+
     return report_path
 
-def generate_master_report(results, output_dir):
+
+def generate_master_report(
+    results, output_dir, report_name="master_analysis_report.html"
+):
     """
     Generates a master HTML report comparing all analyzed complexes.
     results: List of dicts {complex_name, analysis_dir, plots, metadata}
     """
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     html_content = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -196,20 +203,20 @@ def generate_master_report(results, output_dir):
         comp = res["complex_name"]
         plots = res["plots"]
         meta = res["metadata"]
-        
+
         # Extract stats safely
         p_rmsd = plots.get("Protein RMSD", {}).get("stats")
         l_rmsd = plots.get("Ligand RMSD", {}).get("stats")
         hbonds = plots.get("Hydrogen Bonds", {}).get("stats")
-        
+
         p_rmsd_val = f"{p_rmsd[0]['mean']:.3f}" if p_rmsd and p_rmsd[0] else "N/A"
         l_rmsd_val = f"{l_rmsd[0]['mean']:.3f}" if l_rmsd and l_rmsd[0] else "N/A"
         hbonds_val = f"{hbonds[0]['mean']:.1f}" if hbonds and hbonds[0] else "N/A"
-        
+
         html_content += f"""
                         <tr>
                             <td><strong>{comp}</strong></td>
-                            <td><span class="badge">{meta.get('Ligand Group', 'N/A')}</span></td>
+                            <td><span class="badge">{meta.get("Ligand Group", "N/A")}</span></td>
                             <td><span class="metric">{p_rmsd_val}</span></td>
                             <td><span class="metric">{l_rmsd_val}</span></td>
                             <td><span class="metric">{hbonds_val}</span></td>
@@ -223,20 +230,26 @@ def generate_master_report(results, output_dir):
     """
 
     # Group plots by type
-    plot_types = ["Protein RMSD", "Ligand RMSD", "Hydrogen Bonds", "Protein RMSF", "Radius of Gyration"]
-    
+    plot_types = [
+        "Protein RMSD",
+        "Ligand RMSD",
+        "Hydrogen Bonds",
+        "Protein RMSF",
+        "Radius of Gyration",
+    ]
+
     for ptype in plot_types:
         # Check if at least one result has this plot type
         has_plot = any(ptype in res["plots"] for res in results)
         if not has_plot:
             continue
-            
+
         html_content += f"""
             <div class="summary-card">
                 <h2>{ptype} Comparison</h2>
                 <div class="plot-grid">
         """
-        
+
         for res in results:
             if ptype in res["plots"]:
                 pdata = res["plots"][ptype]
@@ -244,11 +257,11 @@ def generate_master_report(results, output_dir):
                 if b64_img:
                     html_content += f"""
                     <div class="plot-card">
-                        <h3>{res['complex_name']}</h3>
-                        <img src="{b64_img}" alt="{ptype} - {res['complex_name']}">
+                        <h3>{res["complex_name"]}</h3>
+                        <img src="{b64_img}" alt="{ptype} - {res["complex_name"]}">
                     </div>
                     """
-        
+
         html_content += """
                 </div>
             </div>
@@ -263,8 +276,8 @@ def generate_master_report(results, output_dir):
     </html>
     """
 
-    report_path = os.path.join(output_dir, "master_analysis_report.html")
+    report_path = os.path.join(output_dir, report_name)
     with open(report_path, "w") as f:
         f.write(html_content)
-    
+
     return report_path
