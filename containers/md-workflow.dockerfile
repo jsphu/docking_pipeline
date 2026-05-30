@@ -47,7 +47,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Copy the workflow scripts and source code
-COPY scripts/md_workflow/ /app/
+COPY ../scripts/md_workflow/ /app/
 
 # Ensure scripts are executable (Fixed: done right before defining entrypoint)
 RUN chmod +x /app/md_workflow.py /app/post_md.py /app/entrypoint.sh
