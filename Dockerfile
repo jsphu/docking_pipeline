@@ -6,6 +6,11 @@ LABEL description="Full MD Workflow with GROMACS, ACPYPE, and RDKit"
 # FORCE ROOT USER TEMPORARILY TO CONSTRUCT THE PIPELINE
 USER root
 
+# Install shell and basic utilities required for subsequent RUN commands
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  bash \
+  && rm -rf /var/lib/apt/lists/*
+
 # Prevent interactive prompts during installation
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -18,11 +23,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libxml2 \
   openbabel \
   && rm -rf /var/lib/apt/lists/*
-
-# Install Micromamba for fast dependency management
-RUN wget -qO- https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xj bin/micromamba \
-  && mv bin/micromamba /usr/local/bin/ \
-  && rm -rf bin
 
 # Create the environment with all scientific tools
 RUN micromamba create -n md_env -c conda-forge -y \
