@@ -24,6 +24,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   openbabel \
   && rm -rf /var/lib/apt/lists/*
 
+# Install Micromamba for fast dependency management
+RUN wget -qO- https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xj bin/micromamba \
+  && mv bin/micromamba /usr/local/bin/ \
+  && rm -rf bin
+
 # Create the environment with all scientific tools
 RUN micromamba create -n md_env -c conda-forge -y \
   python=3.10 \
