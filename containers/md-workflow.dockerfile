@@ -12,6 +12,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
   wget \
+  bzip2 \
   ca-certificates \
   git \
   libxml2 \
