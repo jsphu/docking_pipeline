@@ -1,0 +1,414 @@
+MODEL 1
+REMARK VINA RESULT:      -9.0      0.000      0.000
+REMARK  Name = 2-[2-(8-fluoro-1,3,4,5-tetrahydro-2H-pyrido[4,3-b]indol-2-yl)-2-oxoethyl]-2,5,6,7,8,9-hexahydro-3H-cyclohepta[c]pyridazin-3-one
+REMARK  2 active torsions:
+REMARK  status: ('A' for Active; 'I' for Inactive)
+REMARK    1  A    between atoms: N_2  and  C_9
+REMARK    2  A    between atoms: C_9  and  C_10
+REMARK                            x       y       z     vdW  Elec       q    Type
+REMARK                         _______ _______ _______ _____ _____    ______ ____
+ROOT
+ATOM      1  C   UNL     1      13.576  57.219   2.689  0.00  0.00    +0.000 A 
+ATOM      2  C   UNL     1      13.779  58.162   2.924  0.00  0.00    +0.000 A 
+ATOM      3  N   UNL     1      14.149  58.189   3.848  0.00  0.00    +0.000 NA
+ATOM      4  N   UNL     1      13.016  57.715   1.131  0.00  0.00    +0.000 N 
+ATOM      5  C   UNL     1      13.819  56.647   3.471  0.00  0.00    +0.000 A 
+ATOM      6  C   UNL     1      12.635  57.500   0.235  0.00  0.00    +0.000 C 
+ATOM      7  C   UNL     1      13.190  56.989   1.784  0.00  0.00    +0.000 C 
+ATOM      8  C   UNL     1      14.177  57.248   4.195  0.00  0.00    +0.000 A 
+ATOM      9  C   UNL     1      13.603  58.894   2.265  0.00  0.00    +0.000 C 
+ATOM     10  C   UNL     1      13.220  58.673   1.363  0.00  0.00    +0.000 C 
+ATOM     11  C   UNL     1      13.767  55.666   3.628  0.00  0.00    +0.000 A 
+ATOM     12  O   UNL     1      12.459  58.232  -0.424  0.00  0.00    +0.000 OA
+ATOM     13  C   UNL     1      14.475  56.858   5.061  0.00  0.00    +0.000 A 
+ATOM     14  C   UNL     1      14.066  55.277   4.496  0.00  0.00    +0.000 A 
+ATOM     15  C   UNL     1      14.422  55.879   5.216  0.00  0.00    +0.000 A 
+ATOM     16  F   UNL     1      14.007  54.286   4.640  0.00  0.00    +0.000 F 
+ENDROOT
+BRANCH   6  17
+ATOM     17  C   UNL     1      12.428  56.551  -0.006  0.00  0.00    +0.000 C 
+BRANCH  17  18
+ATOM     18  N   UNL     1      12.044  56.334  -0.904  0.00  0.00    +0.000 N 
+ATOM     19  N   UNL     1      11.325  56.920  -1.291  0.00  0.00    +0.000 NA
+ATOM     20  C   UNL     1      12.375  55.537  -1.410  0.00  0.00    +0.000 A 
+ATOM     21  C   UNL     1      11.985  55.332  -2.299  0.00  0.00    +0.000 A 
+ATOM     22  C   UNL     1      10.946  56.694  -2.190  0.00  0.00    +0.000 A 
+ATOM     23  C   UNL     1      11.280  55.897  -2.693  0.00  0.00    +0.000 A 
+ATOM     24  O   UNL     1      13.091  54.957  -1.018  0.00  0.00    +0.000 OA
+ATOM     25  C   UNL     1      10.988  55.559  -3.598  0.00  0.00    +0.000 C 
+ATOM     26  C   UNL     1      10.235  57.355  -2.468  0.00  0.00    +0.000 C 
+ATOM     27  C   UNL     1      10.296  55.939  -4.211  0.00  0.00    +0.000 C 
+ATOM     28  C   UNL     1       9.693  57.379  -3.305  0.00  0.00    +0.000 C 
+ATOM     29  C   UNL     1       9.721  56.744  -4.084  0.00  0.00    +0.000 C 
+ENDBRANCH  17  18
+ENDBRANCH   6  17
+TORSDOF 2
+ENDMDL
+MODEL 2
+REMARK VINA RESULT:      -8.8      1.747      2.476
+REMARK  Name = 2-[2-(8-fluoro-1,3,4,5-tetrahydro-2H-pyrido[4,3-b]indol-2-yl)-2-oxoethyl]-2,5,6,7,8,9-hexahydro-3H-cyclohepta[c]pyridazin-3-one
+REMARK  2 active torsions:
+REMARK  status: ('A' for Active; 'I' for Inactive)
+REMARK    1  A    between atoms: N_2  and  C_9
+REMARK    2  A    between atoms: C_9  and  C_10
+REMARK                            x       y       z     vdW  Elec       q    Type
+REMARK                         _______ _______ _______ _____ _____    ______ ____
+ROOT
+ATOM      1  C   UNL     1      14.675  56.535   2.548  0.00  0.00    +0.000 A 
+ATOM      2  C   UNL     1      15.481  57.114   2.572  0.00  0.00    +0.000 A 
+ATOM      3  N   UNL     1      15.947  56.978   3.442  0.00  0.00    +0.000 NA
+ATOM      4  N   UNL     1      14.289  57.120   0.968  0.00  0.00    +0.000 N 
+ATOM      5  C   UNL     1      14.632  56.031   3.409  0.00  0.00    +0.000 A 
+ATOM      6  C   UNL     1      13.699  57.129   0.163  0.00  0.00    +0.000 C 
+ATOM      7  C   UNL     1      14.070  56.536   1.739  0.00  0.00    +0.000 C 
+ATOM      8  C   UNL     1      15.422  56.303   3.968  0.00  0.00    +0.000 A 
+ATOM      9  C   UNL     1      15.702  57.703   1.795  0.00  0.00    +0.000 C 
+ATOM     10  C   UNL     1      15.106  57.709   0.987  0.00  0.00    +0.000 C 
+ATOM     11  C   UNL     1      13.986  55.362   3.763  0.00  0.00    +0.000 A 
+ATOM     12  O   UNL     1      13.920  57.718  -0.614  0.00  0.00    +0.000 OA
+ATOM     13  C   UNL     1      15.553  55.904   4.871  0.00  0.00    +0.000 A 
+ATOM     14  C   UNL     1      14.117  54.962   4.667  0.00  0.00    +0.000 A 
+ATOM     15  C   UNL     1      14.908  55.237   5.223  0.00  0.00    +0.000 A 
+ATOM     16  F   UNL     1      13.459  54.289   5.010  0.00  0.00    +0.000 F 
+ENDROOT
+BRANCH   6  17
+ATOM     17  C   UNL     1      12.885  56.547   0.135  0.00  0.00    +0.000 C 
+BRANCH  17  18
+ATOM     18  N   UNL     1      12.754  55.906  -0.622  0.00  0.00    +0.000 N 
+ATOM     19  N   UNL     1      13.491  55.268  -0.865  0.00  0.00    +0.000 NA
+ATOM     20  C   UNL     1      11.894  55.903  -1.131  0.00  0.00    +0.000 A 
+ATOM     21  C   UNL     1      11.776  55.262  -1.880  0.00  0.00    +0.000 A 
+ATOM     22  C   UNL     1      13.351  54.629  -1.625  0.00  0.00    +0.000 A 
+ATOM     23  C   UNL     1      12.489  54.630  -2.131  0.00  0.00    +0.000 A 
+ATOM     24  O   UNL     1      11.163  56.541  -0.884  0.00  0.00    +0.000 OA
+ATOM     25  C   UNL     1      12.219  54.046  -2.909  0.00  0.00    +0.000 C 
+ATOM     26  C   UNL     1      14.160  54.044  -1.770  0.00  0.00    +0.000 C 
+ATOM     27  C   UNL     1      12.746  53.327  -3.361  0.00  0.00    +0.000 C 
+ATOM     28  C   UNL     1      14.302  53.325  -2.448  0.00  0.00    +0.000 C 
+ATOM     29  C   UNL     1      13.668  53.006  -3.159  0.00  0.00    +0.000 C 
+ENDBRANCH  17  18
+ENDBRANCH   6  17
+TORSDOF 2
+ENDMDL
+MODEL 3
+REMARK VINA RESULT:      -8.7      2.430      6.527
+REMARK  Name = 2-[2-(8-fluoro-1,3,4,5-tetrahydro-2H-pyrido[4,3-b]indol-2-yl)-2-oxoethyl]-2,5,6,7,8,9-hexahydro-3H-cyclohepta[c]pyridazin-3-one
+REMARK  2 active torsions:
+REMARK  status: ('A' for Active; 'I' for Inactive)
+REMARK    1  A    between atoms: N_2  and  C_9
+REMARK    2  A    between atoms: C_9  and  C_10
+REMARK                            x       y       z     vdW  Elec       q    Type
+REMARK                         _______ _______ _______ _____ _____    ______ ____
+ROOT
+ATOM      1  C   UNL     1      13.043  55.248  -1.265  0.00  0.00    +0.000 A 
+ATOM      2  C   UNL     1      12.113  55.543  -1.450  0.00  0.00    +0.000 A 
+ATOM      3  N   UNL     1      11.708  54.925  -2.118  0.00  0.00    +0.000 NA
+ATOM      4  N   UNL     1      13.245  56.551  -0.148  0.00  0.00    +0.000 N 
+ATOM      5  C   UNL     1      13.226  54.438  -1.821  0.00  0.00    +0.000 A 
+ATOM      6  C   UNL     1      13.804  57.059   0.504  0.00  0.00    +0.000 C 
+ATOM      7  C   UNL     1      13.618  55.755  -0.608  0.00  0.00    +0.000 C 
+ATOM      8  C   UNL     1      12.397  54.234  -2.354  0.00  0.00    +0.000 A 
+ATOM      9  C   UNL     1      11.737  56.345  -0.986  0.00  0.00    +0.000 C 
+ATOM     10  C   UNL     1      12.303  56.854  -0.331  0.00  0.00    +0.000 C 
+ATOM     11  C   UNL     1      14.028  53.858  -1.918  0.00  0.00    +0.000 A 
+ATOM     12  O   UNL     1      13.429  57.862   0.967  0.00  0.00    +0.000 OA
+ATOM     13  C   UNL     1      12.385  53.455  -2.973  0.00  0.00    +0.000 A 
+ATOM     14  C   UNL     1      14.016  53.078  -2.539  0.00  0.00    +0.000 A 
+ATOM     15  C   UNL     1      13.186  52.877  -3.069  0.00  0.00    +0.000 A 
+ATOM     16  F   UNL     1      14.832  52.503  -2.626  0.00  0.00    +0.000 F 
+ENDROOT
+BRANCH   6  17
+ATOM     17  C   UNL     1      14.742  56.766   0.693  0.00  0.00    +0.000 C 
+BRANCH  17  18
+ATOM     18  N   UNL     1      15.017  56.537   1.628  0.00  0.00    +0.000 N 
+ATOM     19  N   UNL     1      14.358  56.098   2.245  0.00  0.00    +0.000 NA
+ATOM     20  C   UNL     1      15.943  56.747   1.942  0.00  0.00    +0.000 A 
+ATOM     21  C   UNL     1      16.203  56.515   2.870  0.00  0.00    +0.000 A 
+ATOM     22  C   UNL     1      14.642  55.873   3.179  0.00  0.00    +0.000 A 
+ATOM     23  C   UNL     1      15.568  56.084   3.489  0.00  0.00    +0.000 A 
+ATOM     24  O   UNL     1      16.595  57.185   1.321  0.00  0.00    +0.000 OA
+ATOM     25  C   UNL     1      15.981  55.913   4.394  0.00  0.00    +0.000 C 
+ATOM     26  C   UNL     1      13.894  55.437   3.698  0.00  0.00    +0.000 C 
+ATOM     27  C   UNL     1      15.564  55.492   5.200  0.00  0.00    +0.000 C 
+ATOM     28  C   UNL     1      13.891  55.110   4.641  0.00  0.00    +0.000 C 
+ATOM     29  C   UNL     1      14.639  55.136   5.311  0.00  0.00    +0.000 C 
+ENDBRANCH  17  18
+ENDBRANCH   6  17
+TORSDOF 2
+ENDMDL
+MODEL 4
+REMARK VINA RESULT:      -8.5      1.414      1.498
+REMARK  Name = 2-[2-(8-fluoro-1,3,4,5-tetrahydro-2H-pyrido[4,3-b]indol-2-yl)-2-oxoethyl]-2,5,6,7,8,9-hexahydro-3H-cyclohepta[c]pyridazin-3-one
+REMARK  2 active torsions:
+REMARK  status: ('A' for Active; 'I' for Inactive)
+REMARK    1  A    between atoms: N_2  and  C_9
+REMARK    2  A    between atoms: C_9  and  C_10
+REMARK                            x       y       z     vdW  Elec       q    Type
+REMARK                         _______ _______ _______ _____ _____    ______ ____
+ROOT
+ATOM      1  C   UNL     1      14.798  56.421   1.997  0.00  0.00    +0.000 A 
+ATOM      2  C   UNL     1      15.635  56.954   1.952  0.00  0.00    +0.000 A 
+ATOM      3  N   UNL     1      16.040  56.990   2.861  0.00  0.00    +0.000 NA
+ATOM      4  N   UNL     1      14.540  56.663   0.305  0.00  0.00    +0.000 N 
+ATOM      5  C   UNL     1      14.675  56.120   2.941  0.00  0.00    +0.000 A 
+ATOM      6  C   UNL     1      13.999  56.522  -0.521  0.00  0.00    +0.000 C 
+ATOM      7  C   UNL     1      14.242  56.272   1.167  0.00  0.00    +0.000 C 
+ATOM      8  C   UNL     1      15.447  56.472   3.482  0.00  0.00    +0.000 A 
+ATOM      9  C   UNL     1      15.935  57.348   1.083  0.00  0.00    +0.000 C 
+ATOM     10  C   UNL     1      15.388  57.204   0.253  0.00  0.00    +0.000 C 
+ATOM     11  C   UNL     1      13.971  55.575   3.386  0.00  0.00    +0.000 A 
+ATOM     12  O   UNL     1      14.299  56.916  -1.390  0.00  0.00    +0.000 OA
+ATOM     13  C   UNL     1      15.501  56.274   4.456  0.00  0.00    +0.000 A 
+ATOM     14  C   UNL     1      14.026  55.377   4.361  0.00  0.00    +0.000 A 
+ATOM     15  C   UNL     1      14.798  55.731   4.898  0.00  0.00    +0.000 A 
+ATOM     16  F   UNL     1      13.309  54.827   4.795  0.00  0.00    +0.000 F 
+ENDROOT
+BRANCH   6  17
+ATOM     17  C   UNL     1      13.155  55.986  -0.480  0.00  0.00    +0.000 C 
+BRANCH  17  18
+ATOM     18  N   UNL     1      12.466  56.079  -1.201  0.00  0.00    +0.000 N 
+ATOM     19  N   UNL     1      12.102  56.988  -1.424  0.00  0.00    +0.000 NA
+ATOM     20  C   UNL     1      12.146  55.269  -1.693  0.00  0.00    +0.000 A 
+ATOM     21  C   UNL     1      11.464  55.375  -2.405  0.00  0.00    +0.000 A 
+ATOM     22  C   UNL     1      11.413  57.071  -2.147  0.00  0.00    +0.000 A 
+ATOM     23  C   UNL     1      11.095  56.259  -2.637  0.00  0.00    +0.000 A 
+ATOM     24  O   UNL     1      12.514  54.367  -1.465  0.00  0.00    +0.000 OA
+ATOM     25  C   UNL     1      10.414  56.201  -3.379  0.00  0.00    +0.000 C 
+ATOM     26  C   UNL     1      11.127  58.030  -2.277  0.00  0.00    +0.000 C 
+ATOM     27  C   UNL     1       9.890  56.940  -3.804  0.00  0.00    +0.000 C 
+ATOM     28  C   UNL     1      10.463  58.406  -2.920  0.00  0.00    +0.000 C 
+ATOM     29  C   UNL     1       9.910  57.916  -3.603  0.00  0.00    +0.000 C 
+ENDBRANCH  17  18
+ENDBRANCH   6  17
+TORSDOF 2
+ENDMDL
+MODEL 5
+REMARK VINA RESULT:      -8.3      2.319      3.314
+REMARK  Name = 2-[2-(8-fluoro-1,3,4,5-tetrahydro-2H-pyrido[4,3-b]indol-2-yl)-2-oxoethyl]-2,5,6,7,8,9-hexahydro-3H-cyclohepta[c]pyridazin-3-one
+REMARK  2 active torsions:
+REMARK  status: ('A' for Active; 'I' for Inactive)
+REMARK    1  A    between atoms: N_2  and  C_9
+REMARK    2  A    between atoms: C_9  and  C_10
+REMARK                            x       y       z     vdW  Elec       q    Type
+REMARK                         _______ _______ _______ _____ _____    ______ ____
+ROOT
+ATOM      1  C   UNL     1      13.684  57.024   1.834  0.00  0.00    +0.000 A 
+ATOM      2  C   UNL     1      13.869  57.999   1.821  0.00  0.00    +0.000 A 
+ATOM      3  N   UNL     1      14.074  58.297   2.749  0.00  0.00    +0.000 NA
+ATOM      4  N   UNL     1      13.415  57.042   0.126  0.00  0.00    +0.000 N 
+ATOM      5  C   UNL     1      13.773  56.705   2.776  0.00  0.00    +0.000 A 
+ATOM      6  C   UNL     1      13.190  56.572  -0.724  0.00  0.00    +0.000 C 
+ATOM      7  C   UNL     1      13.454  56.537   0.979  0.00  0.00    +0.000 C 
+ATOM      8  C   UNL     1      14.015  57.495   3.349  0.00  0.00    +0.000 A 
+ATOM      9  C   UNL     1      13.829  58.509   0.962  0.00  0.00    +0.000 C 
+ATOM     10  C   UNL     1      13.602  58.031   0.108  0.00  0.00    +0.000 C 
+ATOM     11  C   UNL     1      13.667  55.808   3.194  0.00  0.00    +0.000 A 
+ATOM     12  O   UNL     1      13.150  57.081  -1.584  0.00  0.00    +0.000 OA
+ATOM     13  C   UNL     1      14.149  57.375   4.328  0.00  0.00    +0.000 A 
+ATOM     14  C   UNL     1      13.801  55.689   4.175  0.00  0.00    +0.000 A 
+ATOM     15  C   UNL     1      14.043  56.480   4.744  0.00  0.00    +0.000 A 
+ATOM     16  F   UNL     1      13.691  54.779   4.582  0.00  0.00    +0.000 F 
+ENDROOT
+BRANCH   6  17
+ATOM     17  C   UNL     1      13.002  55.588  -0.716  0.00  0.00    +0.000 C 
+BRANCH  17  18
+ATOM     18  N   UNL     1      13.543  54.971  -1.288  0.00  0.00    +0.000 N 
+ATOM     19  N   UNL     1      14.543  55.067  -1.315  0.00  0.00    +0.000 NA
+ATOM     20  C   UNL     1      13.088  54.263  -1.829  0.00  0.00    +0.000 A 
+ATOM     21  C   UNL     1      13.636  53.657  -2.392  0.00  0.00    +0.000 A 
+ATOM     22  C   UNL     1      15.076  54.444  -1.891  0.00  0.00    +0.000 A 
+ATOM     23  C   UNL     1      14.617  53.738  -2.430  0.00  0.00    +0.000 A 
+ATOM     24  O   UNL     1      12.091  54.172  -1.797  0.00  0.00    +0.000 OA
+ATOM     25  C   UNL     1      15.029  53.052  -3.044  0.00  0.00    +0.000 C 
+ATOM     26  C   UNL     1      16.065  54.641  -1.832  0.00  0.00    +0.000 C 
+ATOM     27  C   UNL     1      15.994  52.912  -3.265  0.00  0.00    +0.000 C 
+ATOM     28  C   UNL     1      16.824  54.186  -2.292  0.00  0.00    +0.000 C 
+ATOM     29  C   UNL     1      16.791  53.412  -2.933  0.00  0.00    +0.000 C 
+ENDBRANCH  17  18
+ENDBRANCH   6  17
+TORSDOF 2
+ENDMDL
+MODEL 6
+REMARK VINA RESULT:      -8.2      2.464      6.749
+REMARK  Name = 2-[2-(8-fluoro-1,3,4,5-tetrahydro-2H-pyrido[4,3-b]indol-2-yl)-2-oxoethyl]-2,5,6,7,8,9-hexahydro-3H-cyclohepta[c]pyridazin-3-one
+REMARK  2 active torsions:
+REMARK  status: ('A' for Active; 'I' for Inactive)
+REMARK    1  A    between atoms: N_2  and  C_9
+REMARK    2  A    between atoms: C_9  and  C_10
+REMARK                            x       y       z     vdW  Elec       q    Type
+REMARK                         _______ _______ _______ _____ _____    ______ ____
+ROOT
+ATOM      1  C   UNL     1      11.497  58.537  -2.671  0.00  0.00    +0.000 A 
+ATOM      2  C   UNL     1      11.840  59.358  -3.113  0.00  0.00    +0.000 A 
+ATOM      3  N   UNL     1      11.310  59.520  -3.941  0.00  0.00    +0.000 NA
+ATOM      4  N   UNL     1      12.665  58.715  -1.409  0.00  0.00    +0.000 N 
+ATOM      5  C   UNL     1      10.746  58.180  -3.225  0.00  0.00    +0.000 A 
+ATOM      6  C   UNL     1      13.082  58.400  -0.560  0.00  0.00    +0.000 C 
+ATOM      7  C   UNL     1      11.911  58.209  -1.810  0.00  0.00    +0.000 C 
+ATOM      8  C   UNL     1      10.627  58.789  -4.016  0.00  0.00    +0.000 A 
+ATOM      9  C   UNL     1      12.599  59.867  -2.709  0.00  0.00    +0.000 C 
+ATOM     10  C   UNL     1      13.017  59.547  -1.853  0.00  0.00    +0.000 C 
+ATOM     11  C   UNL     1      10.154  57.387  -3.121  0.00  0.00    +0.000 A 
+ATOM     12  O   UNL     1      13.842  58.909  -0.156  0.00  0.00    +0.000 OA
+ATOM     13  C   UNL     1       9.919  58.596  -4.689  0.00  0.00    +0.000 A 
+ATOM     14  C   UNL     1       9.446  57.194  -3.796  0.00  0.00    +0.000 A 
+ATOM     15  C   UNL     1       9.330  57.805  -4.585  0.00  0.00    +0.000 A 
+ATOM     16  F   UNL     1       8.856  56.391  -3.678  0.00  0.00    +0.000 F 
+ENDROOT
+BRANCH   6  17
+ATOM     17  C   UNL     1      12.740  57.573  -0.111  0.00  0.00    +0.000 C 
+BRANCH  17  18
+ATOM     18  N   UNL     1      13.049  57.339   0.811  0.00  0.00    +0.000 N 
+ATOM     19  N   UNL     1      13.002  58.028   1.540  0.00  0.00    +0.000 NA
+ATOM     20  C   UNL     1      13.402  56.423   1.002  0.00  0.00    +0.000 A 
+ATOM     21  C   UNL     1      13.706  56.203   1.920  0.00  0.00    +0.000 A 
+ATOM     22  C   UNL     1      13.314  57.784   2.461  0.00  0.00    +0.000 A 
+ATOM     23  C   UNL     1      13.666  56.867   2.648  0.00  0.00    +0.000 A 
+ATOM     24  O   UNL     1      13.446  55.741   0.270  0.00  0.00    +0.000 OA
+ATOM     25  C   UNL     1      14.009  56.493   3.519  0.00  0.00    +0.000 C 
+ATOM     26  C   UNL     1      13.216  58.558   3.102  0.00  0.00    +0.000 C 
+ATOM     27  C   UNL     1      14.080  56.947   4.407  0.00  0.00    +0.000 C 
+ATOM     28  C   UNL     1      13.444  58.602   4.072  0.00  0.00    +0.000 C 
+ATOM     29  C   UNL     1      13.831  57.880   4.655  0.00  0.00    +0.000 C 
+ENDBRANCH  17  18
+ENDBRANCH   6  17
+TORSDOF 2
+ENDMDL
+MODEL 7
+REMARK VINA RESULT:      -8.2      2.481      6.680
+REMARK  Name = 2-[2-(8-fluoro-1,3,4,5-tetrahydro-2H-pyrido[4,3-b]indol-2-yl)-2-oxoethyl]-2,5,6,7,8,9-hexahydro-3H-cyclohepta[c]pyridazin-3-one
+REMARK  2 active torsions:
+REMARK  status: ('A' for Active; 'I' for Inactive)
+REMARK    1  A    between atoms: N_2  and  C_9
+REMARK    2  A    between atoms: C_9  and  C_10
+REMARK                            x       y       z     vdW  Elec       q    Type
+REMARK                         _______ _______ _______ _____ _____    ______ ____
+ROOT
+ATOM      1  C   UNL     1      12.884  57.114   0.059  0.00  0.00    +0.000 A 
+ATOM      2  C   UNL     1      12.950  58.078  -0.169  0.00  0.00    +0.000 A 
+ATOM      3  N   UNL     1      12.679  58.201  -1.120  0.00  0.00    +0.000 NA
+ATOM      4  N   UNL     1      13.418  57.447   1.669  0.00  0.00    +0.000 N 
+ATOM      5  C   UNL     1      12.569  56.626  -0.754  0.00  0.00    +0.000 A 
+ATOM      6  C   UNL     1      13.653  57.140   2.588  0.00  0.00    +0.000 C 
+ATOM      7  C   UNL     1      13.120  56.792   0.987  0.00  0.00    +0.000 C 
+ATOM      8  C   UNL     1      12.440  57.299  -1.490  0.00  0.00    +0.000 A 
+ATOM      9  C   UNL     1      13.250  58.739   0.518  0.00  0.00    +0.000 C 
+ATOM     10  C   UNL     1      13.487  58.426   1.443  0.00  0.00    +0.000 C 
+ATOM     11  C   UNL     1      12.381  55.665  -0.929  0.00  0.00    +0.000 A 
+ATOM     12  O   UNL     1      13.954  57.801   3.276  0.00  0.00    +0.000 OA
+ATOM     13  C   UNL     1      12.127  57.001  -2.386  0.00  0.00    +0.000 A 
+ATOM     14  C   UNL     1      12.068  55.366  -1.827  0.00  0.00    +0.000 A 
+ATOM     15  C   UNL     1      11.940  56.042  -2.559  0.00  0.00    +0.000 A 
+ATOM     16  F   UNL     1      11.883  54.394  -1.988  0.00  0.00    +0.000 F 
+ENDROOT
+BRANCH   6  17
+ATOM     17  C   UNL     1      13.588  56.169   2.822  0.00  0.00    +0.000 C 
+BRANCH  17  18
+ATOM     18  N   UNL     1      14.284  55.746   3.405  0.00  0.00    +0.000 N 
+ATOM     19  N   UNL     1      15.257  55.904   3.210  0.00  0.00    +0.000 NA
+ATOM     20  C   UNL     1      14.008  55.171   4.175  0.00  0.00    +0.000 A 
+ATOM     21  C   UNL     1      14.707  54.758   4.745  0.00  0.00    +0.000 A 
+ATOM     22  C   UNL     1      15.946  55.477   3.799  0.00  0.00    +0.000 A 
+ATOM     23  C   UNL     1      15.666  54.902   4.568  0.00  0.00    +0.000 A 
+ATOM     24  O   UNL     1      13.036  55.018   4.363  0.00  0.00    +0.000 OA
+ATOM     25  C   UNL     1      16.249  54.417   5.233  0.00  0.00    +0.000 C 
+ATOM     26  C   UNL     1      16.882  55.710   3.502  0.00  0.00    +0.000 C 
+ATOM     27  C   UNL     1      17.247  54.392   5.285  0.00  0.00    +0.000 C 
+ATOM     28  C   UNL     1      17.754  55.429   3.897  0.00  0.00    +0.000 C 
+ATOM     29  C   UNL     1      17.916  54.839   4.695  0.00  0.00    +0.000 C 
+ENDBRANCH  17  18
+ENDBRANCH   6  17
+TORSDOF 2
+ENDMDL
+MODEL 8
+REMARK VINA RESULT:      -8.2      2.912      6.524
+REMARK  Name = 2-[2-(8-fluoro-1,3,4,5-tetrahydro-2H-pyrido[4,3-b]indol-2-yl)-2-oxoethyl]-2,5,6,7,8,9-hexahydro-3H-cyclohepta[c]pyridazin-3-one
+REMARK  2 active torsions:
+REMARK  status: ('A' for Active; 'I' for Inactive)
+REMARK    1  A    between atoms: N_2  and  C_9
+REMARK    2  A    between atoms: C_9  and  C_10
+REMARK                            x       y       z     vdW  Elec       q    Type
+REMARK                         _______ _______ _______ _____ _____    ______ ____
+ROOT
+ATOM      1  C   UNL     1      14.233  53.824  -2.068  0.00  0.00    +0.000 A 
+ATOM      2  C   UNL     1      15.138  53.689  -2.453  0.00  0.00    +0.000 A 
+ATOM      3  N   UNL     1      15.145  52.833  -2.962  0.00  0.00    +0.000 NA
+ATOM      4  N   UNL     1      14.745  55.315  -1.358  0.00  0.00    +0.000 N 
+ATOM      5  C   UNL     1      13.665  53.048  -2.336  0.00  0.00    +0.000 A 
+ATOM      6  C   UNL     1      14.557  56.128  -0.812  0.00  0.00    +0.000 C 
+ATOM      7  C   UNL     1      14.031  54.644  -1.514  0.00  0.00    +0.000 C 
+ATOM      8  C   UNL     1      14.229  52.428  -2.893  0.00  0.00    +0.000 A 
+ATOM      9  C   UNL     1      15.858  54.365  -2.295  0.00  0.00    +0.000 C 
+ATOM     10  C   UNL     1      15.665  55.183  -1.746  0.00  0.00    +0.000 C 
+ATOM     11  C   UNL     1      12.715  52.816  -2.153  0.00  0.00    +0.000 A 
+ATOM     12  O   UNL     1      15.277  56.804  -0.655  0.00  0.00    +0.000 OA
+ATOM     13  C   UNL     1      13.834  51.590  -3.256  0.00  0.00    +0.000 A 
+ATOM     14  C   UNL     1      12.320  51.976  -2.517  0.00  0.00    +0.000 A 
+ATOM     15  C   UNL     1      12.886  51.360  -3.073  0.00  0.00    +0.000 A 
+ATOM     16  F   UNL     1      11.361  51.756  -2.325  0.00  0.00    +0.000 F 
+ENDROOT
+BRANCH   6  17
+ATOM     17  C   UNL     1      13.646  56.268  -0.422  0.00  0.00    +0.000 C 
+BRANCH  17  18
+ATOM     18  N   UNL     1      13.547  56.661   0.493  0.00  0.00    +0.000 N 
+ATOM     19  N   UNL     1      14.018  56.232   1.270  0.00  0.00    +0.000 NA
+ATOM     20  C   UNL     1      12.983  57.476   0.629  0.00  0.00    +0.000 A 
+ATOM     21  C   UNL     1      12.894  57.855   1.541  0.00  0.00    +0.000 A 
+ATOM     22  C   UNL     1      13.914  56.633   2.182  0.00  0.00    +0.000 A 
+ATOM     23  C   UNL     1      13.349  57.447   2.314  0.00  0.00    +0.000 A 
+ATOM     24  O   UNL     1      12.517  57.898  -0.150  0.00  0.00    +0.000 OA
+ATOM     25  C   UNL     1      13.160  57.947   3.170  0.00  0.00    +0.000 C 
+ATOM     26  C   UNL     1      14.432  56.114   2.876  0.00  0.00    +0.000 C 
+ATOM     27  C   UNL     1      13.491  57.751   4.093  0.00  0.00    +0.000 C 
+ATOM     28  C   UNL     1      14.511  56.281   3.856  0.00  0.00    +0.000 C 
+ATOM     29  C   UNL     1      14.089  57.014   4.399  0.00  0.00    +0.000 C 
+ENDBRANCH  17  18
+ENDBRANCH   6  17
+TORSDOF 2
+ENDMDL
+MODEL 9
+REMARK VINA RESULT:      -8.0      1.816      2.564
+REMARK  Name = 2-[2-(8-fluoro-1,3,4,5-tetrahydro-2H-pyrido[4,3-b]indol-2-yl)-2-oxoethyl]-2,5,6,7,8,9-hexahydro-3H-cyclohepta[c]pyridazin-3-one
+REMARK  2 active torsions:
+REMARK  status: ('A' for Active; 'I' for Inactive)
+REMARK    1  A    between atoms: N_2  and  C_9
+REMARK    2  A    between atoms: C_9  and  C_10
+REMARK                            x       y       z     vdW  Elec       q    Type
+REMARK                         _______ _______ _______ _____ _____    ______ ____
+ROOT
+ATOM      1  C   UNL     1      13.645  56.933   2.779  0.00  0.00    +0.000 A 
+ATOM      2  C   UNL     1      13.604  57.880   3.072  0.00  0.00    +0.000 A 
+ATOM      3  N   UNL     1      13.882  57.932   4.027  0.00  0.00    +0.000 NA
+ATOM      4  N   UNL     1      13.111  57.387   1.198  0.00  0.00    +0.000 N 
+ATOM      5  C   UNL     1      13.951  56.383   3.554  0.00  0.00    +0.000 A 
+ATOM      6  C   UNL     1      12.864  57.149   0.262  0.00  0.00    +0.000 C 
+ATOM      7  C   UNL     1      13.397  56.680   1.832  0.00  0.00    +0.000 C 
+ATOM      8  C   UNL     1      14.100  57.002   4.333  0.00  0.00    +0.000 A 
+ATOM      9  C   UNL     1      13.316  58.593   2.433  0.00  0.00    +0.000 C 
+ATOM     10  C   UNL     1      13.067  58.350   1.491  0.00  0.00    +0.000 C 
+ATOM     11  C   UNL     1      14.117  55.408   3.662  0.00  0.00    +0.000 A 
+ATOM     12  O   UNL     1      12.576  57.862  -0.377  0.00  0.00    +0.000 OA
+ATOM     13  C   UNL     1      14.410  56.635   5.205  0.00  0.00    +0.000 A 
+ATOM     14  C   UNL     1      14.427  55.042   4.536  0.00  0.00    +0.000 A 
+ATOM     15  C   UNL     1      14.574  55.662   5.312  0.00  0.00    +0.000 A 
+ATOM     16  F   UNL     1      14.590  54.057   4.630  0.00  0.00    +0.000 F 
+ENDROOT
+BRANCH   6  17
+ATOM     17  C   UNL     1      12.905  56.195  -0.038  0.00  0.00    +0.000 C 
+BRANCH  17  18
+ATOM     18  N   UNL     1      13.351  55.960  -0.902  0.00  0.00    +0.000 N 
+ATOM     19  N   UNL     1      14.211  56.414  -1.156  0.00  0.00    +0.000 NA
+ATOM     20  C   UNL     1      12.941  55.276  -1.507  0.00  0.00    +0.000 A 
+ATOM     21  C   UNL     1      13.394  55.052  -2.361  0.00  0.00    +0.000 A 
+ATOM     22  C   UNL     1      14.651  56.172  -2.023  0.00  0.00    +0.000 A 
+ATOM     23  C   UNL     1      14.238  55.488  -2.625  0.00  0.00    +0.000 A 
+ATOM     24  O   UNL     1      12.085  54.828  -1.248  0.00  0.00    +0.000 OA
+ATOM     25  C   UNL     1      14.572  55.154  -3.516  0.00  0.00    +0.000 C 
+ATOM     26  C   UNL     1      15.503  56.694  -2.164  0.00  0.00    +0.000 C 
+ATOM     27  C   UNL     1      15.395  55.425  -4.015  0.00  0.00    +0.000 C 
+ATOM     28  C   UNL     1      16.142  56.659  -2.930  0.00  0.00    +0.000 C 
+ATOM     29  C   UNL     1      16.092  56.091  -3.757  0.00  0.00    +0.000 C 
+ENDBRANCH  17  18
+ENDBRANCH   6  17
+TORSDOF 2
+ENDMDL
