@@ -25,4 +25,4 @@ jobs:
 
       - name: Build md workflow pipeline
         run: |
-          docker build . --file "containers/md-workflow.dockerfile" --tag jsphu/md-workflow:salad
+          docker build . --tag jsphu/md-workflow:salad
