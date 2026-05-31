@@ -36,6 +36,9 @@ RUN sed -i 's|^BOOST_INCLUDE =.*|BOOST_INCLUDE = /usr/include|' Makefile && \
 
 FROM nvidia/cuda:12.2.0-base-ubuntu22.04
 
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
   libboost-program-options1.74.0 \
   libboost-system1.74.0 \
@@ -44,12 +47,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   ocl-icd-libopencl1 \
   && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /build/Vina-GPU-2.1/AutoDock-Vina-GPU-2.1/AutoDock-Vina-GPU-2-1 /usr/local/bin/
+COPY --from=builder /build/Vina-GPU-2.1/AutoDock-Vina-GPU-2.1/AutoDock-Vina-GPU-2-1 /usr/local/bin/AutoDock-Vina-GPU-2-1.bin
 COPY --from=builder /build/Vina-GPU-2.1/AutoDock-Vina-GPU-2.1/OpenCL /usr/local/bin/OpenCL
 COPY --from=builder /build/vina_official/build/linux/release/vina_split /usr/local/bin/
 
 RUN mkdir -p /etc/OpenCL/vendors && \
-  echo "libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd \
-  cp -r /build/Vina-GPU-2.1/AutoDock-Vina-GPU-2.1/OpenCL .
+  echo "libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd
 
+# Create a wrapper to ensure OpenCL kernels are available in the current directory
+RUN echo '#!/bin/bash\n\
+if [ ! -d "./OpenCL" ]; then\n\
+  ln -s /usr/local/bin/OpenCL ./OpenCL\n\
+fi\n\
+exec AutoDock-Vina-GPU-2-1.bin "$@"' > /usr/local/bin/AutoDock-Vina-GPU-2-1 && \
+    chmod +x /usr/local/bin/AutoDock-Vina-GPU-2-1
+
+WORKDIR /data
 ENTRYPOINT ["AutoDock-Vina-GPU-2-1"]

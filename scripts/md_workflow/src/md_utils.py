@@ -1,5 +1,6 @@
 import os
 import logging
+import subprocess
 from .gmx_utils import run_gmx
 
 logger = logging.getLogger(__name__)
@@ -180,7 +181,24 @@ def run_step(
     md_out_abs = os.path.abspath(os.path.join(target_dir, md_out_base))
     cpt_file = f"{md_out_abs}.cpt"
 
-    md_args = ["mdrun", "-deffnm", md_out_abs, "-ntomp", "1", "-ntmpi", "1"]
+    # Optimization for single-node/single-GPU (e.g. Salad Cloud or WSL)
+    # -ntmpi 1: Single MPI rank is most stable for GPU offloading on a single node
+    # Detect available CPU cores
+    cpu_count = os.cpu_count() or 4
+    ntomp = os.environ.get("SLURM_CPUS_PER_TASK", str(cpu_count))
+    
+    md_args = [
+        "mdrun",
+        "-v",
+        "-deffnm",
+        md_out_abs,
+        "-ntmpi",
+        "1",
+        "-ntomp",
+        ntomp,
+        "-pin",
+        "on",
+    ]
     md_input = {"-s": tpr}
 
     # If production MD and checkpoint exists, resume
@@ -188,13 +206,31 @@ def run_step(
         logger.info(f"Existing checkpoint found for {step_name}. Resuming...")
         md_input["-cpi"] = cpt_file
 
+    # Detect GROMACS build type (OpenCL vs CUDA)
+    is_opencl = False
+    try:
+        # Check GROMACS version once
+        result = subprocess.run(["gmx", "mdrun", "-version"], capture_output=True, text=True)
+        if "OpenCL" in result.stdout:
+            is_opencl = True
+            logger.info("Detected OpenCL GROMACS build.")
+        elif "CUDA" in result.stdout:
+            logger.info("Detected CUDA GROMACS build.")
+    except Exception:
+        pass
+
     if gpu and step_name != "em":
-        # -nb gpu and -pme gpu are stable and fast.
-        # -bonded gpu and GPU updates can cause segfaults (Code 139) if update groups are not possible.
-        # We explicitly force -update cpu to ensure stability.
-        md_args.extend(["-nb", "gpu", "-pme", "gpu", "-update", "cpu"])
+        # -nb gpu and -pme gpu provide the most significant speedup.
+        md_args.extend(["-nb", "gpu", "-pme", "gpu"])
+        
+        if not is_opencl:
+            # For modern CUDA (RTX 30/40/50), bonded GPU is usually stable.
+            # We keep update on CPU for widest compatibility unless specified.
+            md_args.extend(["-bonded", "gpu", "-update", "cpu"]) 
+        else:
+            md_args.extend(["-bonded", "cpu", "-update", "cpu"])
     elif gpu and step_name == "em":
-        # Force CPU for EM to avoid GPU crashes on high strain
+        # Energy minimization often fails on GPU due to extreme forces; CPU is safer.
         md_args.extend(["-nb", "cpu"])
 
     if not run_gmx(
@@ -205,10 +241,9 @@ def run_step(
         host_root=host_root,
         cwd=target_dir,
     ):
-        if (
-            not use_docker
-        ):  # Only fallback if not using docker (docker should have correct drivers)
+        if not use_docker:
             logger.warning("Warning: GPU failed locally, falling back to CPU...")
+            # Simple CPU fallback for local runs
             if not run_gmx(
                 ["mdrun", "-deffnm", md_out_abs],
                 input_files={"-s": tpr},
@@ -216,6 +251,7 @@ def run_step(
             ):
                 raise RuntimeError(f"mdrun ({step_name}) failed on CPU")
         else:
-            raise RuntimeError(f"mdrun ({step_name}) failed in Docker")
+            # In Docker/Salad environment, we don't want a silent CPU fallback if GPU fails
+            raise RuntimeError(f"mdrun ({step_name}) failed in GPU mode")
 
     return os.path.abspath(f"{md_out_abs}.gro"), os.path.abspath(f"{md_out_abs}.cpt")

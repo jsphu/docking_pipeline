@@ -21,6 +21,8 @@ scripts/md_workflow/data/*
 !scripts/md_workflow/data/6NJS-1.json
 !scripts/md_workflow/data/6NJS-2.json
 !scripts/md_workflow/data/6NJS.pdb
+!scripts/md_workflow/data/smoke_test.json
+!scripts/md_workflow/data/ligand_6NJS_ref.pdb
 
 # Allow the leads directory but ignore its contents by default
 !scripts/md_workflow/data/leads/

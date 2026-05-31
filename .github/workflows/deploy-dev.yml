@@ -23,6 +23,7 @@ jobs:
           username: jsphu
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build md workflow pipeline
+      - name: Build md workflow testing pipeline
         run: |
-          docker build . --tag jsphu/md-workflow:salad
+          docker build . --tag ghcr.io/jsphu/md-workflow:test --file containers/md-workflow.dockerfile
+          docker push ghcr.io/jsphu/md-workflow:test

@@ -30,9 +30,19 @@ RUN sed -i 's|^BOOST_LIB_PATH=.*|BOOST_LIB_PATH=/usr/include|' Makefile && \
 
 RUN make source -j "$(nproc)"
 
-RUN cp QuickVina-W-GPU-2-1 /usr/local/bin/
-
+RUN cp QuickVina-W-GPU-2-1 /usr/local/bin/QuickVina-W-GPU-2-1.bin
 RUN cp -r OpenCL /usr/local/bin/
 
+RUN mkdir -p /etc/OpenCL/vendors && \
+    echo "libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd
+
+# Create a wrapper to ensure OpenCL kernels are available in the current directory
+RUN echo '#!/bin/bash\n\
+if [ ! -d "./OpenCL" ]; then\n\
+  ln -s /usr/local/bin/OpenCL ./OpenCL\n\
+fi\n\
+exec QuickVina-W-GPU-2-1.bin "$@"' > /usr/local/bin/QuickVina-W-GPU-2-1 && \
+    chmod +x /usr/local/bin/QuickVina-W-GPU-2-1
+
 WORKDIR /data
-CMD ["QuickVina-W-GPU-2-1"]
+ENTRYPOINT ["QuickVina-W-GPU-2-1"]
