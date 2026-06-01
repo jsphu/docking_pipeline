@@ -38,6 +38,14 @@ class Notifier:
             else:
                 self._send_email_sendmail(message)
 
+    def _send_telegram(self, message):
+        try:
+            url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
+            data = {"chat_id": self.telegram_chat_id, "text": message}
+            requests.post(url, json=data, timeout=10)
+        except Exception as e:
+            logger.error(f"Failed to send Telegram notification: {e}")
+
     def _send_email_smtp(self, message):
         try:
             msg = MIMEText(message)
