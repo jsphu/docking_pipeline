@@ -23,7 +23,15 @@ class Notifier:
         self.smtp_port = int(os.environ.get("SMTP_PORT", 587))
         self.smtp_user = os.environ.get("SMTP_USER") or self.config.get("smtp_user")
         self.smtp_password = os.environ.get("SMTP_PASSWORD") or self.config.get("smtp_password")
-        self.notify_email = os.environ.get("NOTIFY_EMAIL") or self.config.get("notify_email")
+        
+        # Priority for recipient email: NOTIFY_USER (from .env) -> NOTIFY_EMAIL -> config
+        self.notify_email = os.environ.get("NOTIFY_USER") or os.environ.get("NOTIFY_EMAIL") or self.config.get("notify_email")
+
+    def is_configured(self):
+        """Returns True if at least one notification service is configured."""
+        has_telegram = bool(self.telegram_token and self.telegram_chat_id)
+        has_email = bool(self.smtp_server and self.notify_email)
+        return has_telegram or has_email
 
     def notify(self, message):
         """Sends notification to all configured services."""
@@ -49,14 +57,22 @@ class Notifier:
     def _send_email_smtp(self, message):
         try:
             msg = MIMEText(message)
-            msg['Subject'] = 'MD Simulation Progress Update'
+            msg['Subject'] = f'MD Progress: {self.complex_id if hasattr(self, "complex_id") else "Simulation"}'
             msg['From'] = self.smtp_user
             msg['To'] = self.notify_email
             
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_user, self.smtp_password)
-                server.send_message(msg)
+            if self.smtp_port == 465:
+                with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
+                    server.login(self.smtp_user, self.smtp_password)
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                    server.ehlo()
+                    server.starttls()
+                    server.ehlo()
+                    server.login(self.smtp_user, self.smtp_password)
+                    server.send_message(msg)
+            logger.debug(f"Email sent to {self.notify_email}")
         except Exception as e:
             logger.error(f"Failed to send SMTP notification: {e}")
 
@@ -65,7 +81,7 @@ class Notifier:
         try:
             msg = MIMEText(message)
             msg['Subject'] = 'MD Simulation Progress Update'
-            msg['From'] = 'md-workflow@localhost'
+            msg['From'] = self.smtp_user or 'md-workflow@localhost'
             msg['To'] = self.notify_email
             
             process = subprocess.Popen(["/usr/sbin/sendmail", "-t", "-oi"], stdin=subprocess.PIPE)
@@ -97,34 +113,29 @@ class ProgressMonitor(threading.Thread):
         while not self.stop_event.is_set():
             if os.path.exists(self.log_path):
                 try:
-                    # Execute exactly what user suggested: tail -n 12 log | head -1
-                    cmd = f"tail -n 12 {self.log_path} | head -1"
+                    # Robust way to find the last progress line
+                    cmd = f"grep -A 1 \"Step\" {self.log_path} | grep -v \"Step\" | grep -v \"\\--\" | tail -n 1"
                     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
                     line = result.stdout.strip()
                     
                     if line:
-                        logger.debug(f"Monitor read line: {line}")
-                        # Regex to find numbers (including decimals and scientific notation)
-                        # Handles 100, 100.0, 1.0e+02, etc.
                         numbers = re.findall(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", line)
-                        
                         if len(numbers) >= 2:
-                            try:
-                                # GROMACS logs: first is Step (int-like), second is Time (float)
-                                step = int(float(numbers[0]))
-                                sim_time = float(numbers[1])
-                                
-                                if sim_time > last_notified_time:
-                                    time_ns = sim_time / 1000.0
-                                    message = f"Complex {self.complex_id} passes {time_ns:.3f} ns right now."
-                                    self.notifier.notify(message)
-                                    last_notified_time = sim_time
-                            except ValueError:
-                                pass
+                            sim_time = float(numbers[1])
+                            
+                            # Only notify if simulation time has actually advanced
+                            if sim_time > last_notified_time:
+                                time_ns = sim_time / 1000.0
+                                message = f"Complex {self.complex_id} passes {time_ns:.3f} ns right now."
+                                # Temporarily add complex_id context for email subject
+                                self.notifier.complex_id = self.complex_id
+                                self.notifier.notify(message)
+                                last_notified_time = sim_time
                                 
                 except Exception as e:
-                    logger.debug(f"Monitor error (non-fatal): {e}")
+                    logger.debug(f"Monitor error: {e}")
             
+            # Wait for the next interval
             self.stop_event.wait(self.interval_sec)
         
         logger.info(f"Progress monitor for {self.complex_id} stopped.")

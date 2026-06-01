@@ -26,7 +26,7 @@ class ColorFormatter(logging.Formatter):
         return formatter.format(record)
 
 
-def setup_logger(name=None):
+def setup_logger(name=None, log_path=None):
     """Sets up a logger. If name is None, configures the root logger."""
     logger = logging.getLogger(name)
     # Clear existing handlers to avoid duplicates
@@ -34,9 +34,19 @@ def setup_logger(name=None):
         logger.handlers.clear()
 
     logger.setLevel(logging.INFO)
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(ColorFormatter())
-    logger.addHandler(handler)
+    
+    # Console Handler
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(ColorFormatter())
+    logger.addHandler(stream_handler)
+
+    # File Handler
+    if log_path:
+        file_handler = logging.FileHandler(log_path, mode='a')
+        # Plain formatter for file (no ANSI colors)
+        file_formatter = logging.Formatter("%(asctime)s: %(message)s")
+        file_handler.setFormatter(file_formatter)
+        logger.addHandler(file_handler)
 
     if name is not None:
         logger.propagate = False

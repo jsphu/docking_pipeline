@@ -22,7 +22,7 @@ def setup_acpype_libs():
 
 
 def run_command(cmd, shell=False, cwd=None, env=None, cpus=None):
-    """Utility to run shell commands and handle errors."""
+    """Utility to run shell commands and handle errors with real-time logging."""
     logger.info(f"Running: {' '.join(cmd) if isinstance(cmd, list) else cmd}")
 
     full_env = os.environ.copy()
@@ -39,15 +39,32 @@ def run_command(cmd, shell=False, cwd=None, env=None, cpus=None):
             f"{lib_path}:{existing_ld}" if existing_ld else lib_path
         )
 
-    result = subprocess.run(
-        cmd, shell=shell, capture_output=True, text=True, env=full_env, cwd=cwd
-    )
-    if result.returncode != 0:
-        logger.error(f"Error (Exit Code {result.returncode}):")
-        logger.error(f"STDOUT: {result.stdout}")
-        logger.error(f"STDERR: {result.stderr}")
+    try:
+        process = subprocess.Popen(
+            cmd, 
+            shell=shell, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.STDOUT, 
+            text=True, 
+            env=full_env, 
+            cwd=cwd,
+            bufsize=1
+        )
+
+        for line in process.stdout:
+            clean_line = line.strip()
+            if clean_line:
+                logger.info(f"[CMD] {clean_line}")
+
+        process.wait()
+        
+        if process.returncode != 0:
+            logger.error(f"Command failed with Exit Code {process.returncode}")
+            return False
+        return True
+    except Exception as e:
+        logger.error(f"Failed to run command: {e}")
         return False
-    return True
 
 
 def run_gmx(
@@ -62,7 +79,7 @@ def run_gmx(
     host_root=None,
     cpus=None,
 ):
-    """Utility to run GROMACS commands locally or via Docker."""
+    """Utility to run GROMACS commands locally or via Docker with real-time logging."""
     gmx_cmd = ["gmx"] + args
 
     # Map input/output files to command arguments
@@ -73,56 +90,34 @@ def run_gmx(
         for flag, path in output_files.items():
             gmx_cmd.extend([flag, path])
 
-    if not use_docker:
-        # Fallback to local gmxapi or subprocess
-        full_env = os.environ.copy()
-        if env:
-            full_env.update(env)
-        if cpus:
-            full_env["OMP_NUM_THREADS"] = str(cpus)
+    full_env = os.environ.copy()
+    if env:
+        full_env.update(env)
+    if cpus:
+        full_env["OMP_NUM_THREADS"] = str(cpus)
 
-        if stdin:
-            result = subprocess.run(
-                gmx_cmd, input=stdin, capture_output=True, text=True, env=full_env, cwd=cwd
-            )
-            if result.returncode != 0:
-                logger.error(f"Error: {result.stderr}")
-                return False
-            return True
-        return run_command(gmx_cmd, env=full_env, cwd=cwd, cpus=cpus)
+    if not use_docker:
+        full_cmd = gmx_cmd
+        target_cwd = cwd
     else:
         # Docker mode
         project_root = host_root or os.getcwd()
-
         container_workdir = "/workflow"
         if cwd:
             abs_cwd = os.path.abspath(cwd)
             if abs_cwd.startswith(project_root):
                 container_workdir = abs_cwd.replace(project_root, "/workflow")
 
-        docker_base = [
-            "docker",
-            "run",
-            "--gpus",
-            "all",
-            "-i",
-            "--rm",
-        ]
-        
+        docker_base = ["docker", "run", "--gpus", "all", "-i", "--rm"]
         if cpus:
             docker_base.extend(["--cpus", str(cpus)])
-            
         docker_base.extend([
-            "-v",
-            f"{project_root}:/workflow",
-            "-w",
-            container_workdir,
-            "-u",
-            f"{os.getuid()}:{os.getgid()}",
+            "-v", f"{project_root}:/workflow",
+            "-w", container_workdir,
+            "-u", f"{os.getuid()}:{os.getgid()}",
             image,
         ])
 
-        # Map all paths in gmx_cmd to be relative to /workflow
         mapped_gmx_cmd = []
         for part in gmx_cmd:
             if isinstance(part, str) and part.startswith(project_root):
@@ -131,9 +126,41 @@ def run_gmx(
                 mapped_gmx_cmd.append(str(part))
 
         full_cmd = docker_base + mapped_gmx_cmd
-        logger.info(f"Docker Running: {' '.join(full_cmd)}")
-        result = subprocess.run(full_cmd, input=stdin, capture_output=True, text=True)
-        if result.returncode != 0:
-            logger.error(f"Docker Error (Code {result.returncode}):\n{result.stderr}")
+        target_cwd = None # Docker handles workdir
+
+    logger.info(f"Executing: {' '.join(full_cmd)}")
+    
+    try:
+        # We use Popen to stream output to our logger (and thus to the --log file)
+        process = subprocess.Popen(
+            full_cmd,
+            stdin=subprocess.PIPE if stdin else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, # Merge stderr into stdout for combined logging
+            text=True,
+            env=full_env,
+            cwd=target_cwd,
+            bufsize=1, # Line buffered
+        )
+
+        if stdin:
+            # If stdin is provided, we send it and then close
+            process.stdin.write(stdin)
+            process.stdin.close()
+
+        # Stream the output line by line to the logger
+        for line in process.stdout:
+            clean_line = line.strip()
+            if clean_line:
+                logger.info(f"[GMX] {clean_line}")
+
+        process.wait()
+        
+        if process.returncode != 0:
+            logger.error(f"GMX Command failed with Exit Code {process.returncode}")
             return False
         return True
+        
+    except Exception as e:
+        logger.error(f"Failed to execute GMX command: {e}")
+        return False

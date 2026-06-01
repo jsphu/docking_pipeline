@@ -5,7 +5,7 @@ import glob
 import sys
 from src.config_loader import load_config
 from src.gmx_utils import run_gmx, run_command
-from src.md_utils import generate_mdp_files, run_step
+from src.md_utils import generate_mdp_files, run_step, concatenate_trajectories
 from src.mol_prep import prepare_ligand, prepare_ligand_from_file
 from src.top_utils import (
     merge_complex,
@@ -22,11 +22,6 @@ from src.notify_utils import Notifier
 # Setup Global Root Logger
 setup_logger()
 logger = setup_logger("md_workflow")
-
-"""
-Molecular Dynamics Workflow with GROMACS Docker integration and RDKit preparation.
-Supports batch processing of docking results (PDBQT files).
-"""
 
 
 def get_files(path, extensions):
@@ -51,30 +46,18 @@ def get_files(path, extensions):
 
 
 def main():
-    # Detect default CPU limit
     cpu_count = os.cpu_count() or 1
     default_cpus = min(cpu_count, 16)
 
-    parser = argparse.ArgumentParser(
-        description="Automated MD Workflow for Protein-Ligand Complexes"
-    )
+    parser = argparse.ArgumentParser(description="Automated MD Workflow")
     parser.add_argument(
         "--config", "-c", default="config.json", help="Path to config file"
     )
-    parser.add_argument(
-        "--protein", "-p", nargs="+", help="Protein files (PDB/PDBQT) or directories"
-    )
-    parser.add_argument(
-        "--ligand",
-        "-l",
-        nargs="+",
-        help="Ligand files (SMILES/PDBQT/MOL2) or directories",
-    )
+    parser.add_argument("--protein", "-p", nargs="+", help="Protein files")
+    parser.add_argument("--ligand", "-l", nargs="+", help="Ligand files")
     parser.add_argument("--outdir", "-o", default="results", help="Output directory")
     parser.add_argument("--workdir", "-w", default="work", help="Working directory")
-    parser.add_argument(
-        "--gpu", action="store_true", default=True, help="Enable GPU acceleration"
-    )
+    parser.add_argument("--gpu", action="store_true", default=True, help="Enable GPU")
     parser.add_argument("--no-gpu", action="store_false", dest="gpu")
     parser.add_argument(
         "--docker", action="store_true", default=True, help="Run via Docker"
@@ -83,91 +66,118 @@ def main():
     parser.add_argument(
         "--image", default="nvcr.io/hpc/gromacs:2023.2", help="Docker image"
     )
+    parser.add_argument("--skip-prep", action="store_true", help="Skip preparation")
+    parser.add_argument("--cpus", type=int, default=default_cpus, help="CPUs")
+    parser.add_argument("--upload", action="store_true", help="Upload results")
     parser.add_argument(
-        "--skip-prep",
-        action="store_true",
-        help="Skip ligand and protein preparation steps",
+        "--resume", action="store_true", help="Resume directly from TPR/CPT"
     )
     parser.add_argument(
-        "--cpus",
-        type=int,
-        default=default_cpus,
-        help=f"Maximum number of CPUs for GROMACS (Default: {default_cpus})",
+        "--notify-interval", type=int, default=1800, help="Notify interval"
     )
-    parser.add_argument(
-        "--upload",
-        action="store_true",
-        help="Archive results and upload to external service",
-    )
-    parser.add_argument(
-        "--resume",
-        action="store_true",
-        help="Resume from production MD if checkpoint file exists",
-    )
-    parser.add_argument(
-        "--notify-interval",
-        type=int,
-        default=0,
-        help="Interval in seconds for progress notifications (Default: 0, disabled)",
-    )
+    parser.add_argument("--log", help="Log file")
 
     args = parser.parse_args()
+    if args.log:
+        setup_logger("md_workflow", log_file=args.log)
 
-    host_root = os.path.dirname(os.path.abspath(__file__))
     outdir = os.path.abspath(args.outdir)
     workdir = os.path.abspath(args.workdir)
     os.makedirs(outdir, exist_ok=True)
     os.makedirs(workdir, exist_ok=True)
+    host_root = os.environ.get("HOST_PWD", os.getcwd())
 
+    logger.info(f"Starting workflow. Outdir: {outdir}, Workdir: {workdir}")
+
+    # Load Configuration
+    cfg = {}
     config_path = os.path.abspath(args.config)
-    cfg = load_config(config_path) if os.path.exists(config_path) else {}
+    if os.path.exists(config_path):
+        cfg = load_config(config_path)
 
-    # Defaults
-    if "em" not in cfg:
-        cfg["em"] = {"emtol": 1000.0, "emstep": 0.01, "nsteps": 50000}
-    if "nvt" not in cfg:
-        cfg["nvt"] = {"nsteps": 50000, "dt": 0.002, "tau_t": 0.1}
-    if "npt" not in cfg:
-        cfg["npt"] = {"nsteps": 50000, "dt": 0.002, "tau_t": 0.1, "tau_p": 2.0}
-    if "md" not in cfg:
-        cfg["md"] = {
-            "nsteps": 500000,
-            "dt": 0.002,
-            "tau_t": 0.1,
-            "tau_p": 2.0,
-            "nstxout": 5000,
-            "nstvout": 5000,
-            "nstfout": 5000,
-            "nstxtcout": 5000,
-            "nstenergy": 5000,
-            "nstlog": 5000,
-        }
-    cfg.setdefault("temperature", 300)
-    cfg.setdefault("pressure", 1.0)
-    cfg.setdefault("box_buffer", 1.0)
-    cfg.setdefault("box_type", "cubic")
-    cfg.setdefault("force_field", "amber99sb-ildn")
-    cfg.setdefault("water_model", "tip3p")
-    cfg.setdefault("notifications", {})
-    cfg.setdefault("cutoff_scheme", "Verlet")
-    cfg.setdefault("coulombtype", "PME")
-    cfg.setdefault("rcoulomb", 1.0)
-    cfg.setdefault("rvdw", 1.0)
-    cfg.setdefault("constraint_algorithm", "lincs")
-    cfg.setdefault("constraints", "h-bonds")
-    cfg.setdefault("lincs_iter", 1)
-    cfg.setdefault("lincs_order", 4)
-    cfg.setdefault("nstlist", 10)
-    cfg.setdefault("disp_corr", "EnerPres")
-    cfg.setdefault("pme_order", 4)
-    cfg.setdefault("fourierspacing", 0.16)
-    cfg.setdefault("tcoupl", "V-rescale")
-    cfg.setdefault("pcoupl", "Parrinello-Rahman")
-    cfg.setdefault("pcoupltype", "isotropic")
-    cfg.setdefault("compressibility", "4.5e-5")
+    cfg.setdefault("md", {"nsteps": 500000, "dt": 0.002, "tau_t": 0.1, "tau_p": 2.0})
+    notifier = Notifier(cfg.get("notifications", {}))
+    if not notifier.is_configured():
+        notifier = None
 
-    # Initialize Notifier if interval is set
-    notifier = Notifier(cfg.get("notifications", {})) if args.notify_interval > 0 else None
+    # --- DIRECT RESUME MODE (BLIND RESUME) ---
+    found_resumable = []
+    if args.resume:
+        logger.info("--- Resume Mode Active: Scanning for existing MD files ---")
+        # Search for *_md.tpr in outdir and workdir
+        for search_path in [outdir, workdir]:
+            logger.info(f"Scanning {search_path} for resumable files...")
+            tpr_files = glob.glob(os.path.join(search_path, "*_md.tpr"))
+            for tpr in tpr_files:
+                complex_name = os.path.basename(tpr).replace("_md.tpr", "")
+                cpt = tpr.replace(".tpr", ".cpt")
+                if os.path.exists(cpt):
+                    logger.info(
+                        f"Found resumable complex: {complex_name} (TPR/CPT exist)"
+                    )
+                    # Ensure files are in outdir for consistent execution
+                    if os.path.dirname(tpr) != outdir:
+                        shutil.copy(tpr, os.path.join(outdir, os.path.basename(tpr)))
+                        shutil.copy(cpt, os.path.join(outdir, os.path.basename(cpt)))
+
+                    if complex_name not in found_resumable:
+                        found_resumable.append(complex_name)
+                else:
+                    logger.warning(
+                        f"Found TPR for {complex_name} but CPT is missing. Skipping direct resume."
+                    )
+
+        if found_resumable:
+            logger.info(f"Total resumable complexes identified: {found_resumable}")
+            os.chdir(workdir)
+            mdp_paths = generate_mdp_files(cfg, workdir)
+
+            for complex_name in found_resumable:
+                logger.info(
+                    f">>> [RESUME] Starting Production MD for: {complex_name} <<<"
+                )
+                try:
+                    run_step(
+                        "md",
+                        mdp_paths["md.mdp"],
+                        None,  # gro is None for direct resume
+                        None,  # top is None for direct resume
+                        complex_name,
+                        outdir,
+                        workdir,
+                        gpu=args.gpu,
+                        prev_cpt=os.path.join(outdir, f"{complex_name}_md.cpt"),
+                        use_docker=args.docker,
+                        image=args.image,
+                        host_root=host_root,
+                        cpus=args.cpus,
+                        notify_interval=args.notify_interval,
+                        notifier=notifier,
+                    )
+
+                    logger.info(
+                        f"Finished resumed MD for {complex_name}. Concatenating trajectories..."
+                    )
+                    concatenate_trajectories(
+                        complex_name,
+                        outdir,
+                        use_docker=args.docker,
+                        image=args.image,
+                        host_root=host_root,
+                        cpus=args.cpus,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to resume {complex_name}: {e}")
+
+            # If ONLY resuming (no new inputs), finish here
+            if not args.protein and not args.ligand and "proteins" not in cfg:
+                logger.info("Resume phase complete. No new inputs to process.")
+                if args.upload:
+                    archive_and_finish(outdir, workdir, notifier)
+                return
+
+    # --- NORMAL MODE (Preparation + Simulation) ---
+    logger.info("--- Entering Normal Workflow Phase ---")
 
     # Resolve Proteins
     protein_files = []
@@ -176,9 +186,13 @@ def main():
             protein_files.extend(get_files(p_path, [".pdb", ".pdbqt"]))
     if "proteins" in cfg:
         for p in cfg["proteins"]:
-            protein_files.append(
-                os.path.abspath(os.path.join(os.path.dirname(config_path), p["file"]))
+            p_abs = os.path.abspath(
+                os.path.join(os.path.dirname(config_path), p["file"])
             )
+            if os.path.exists(p_abs):
+                protein_files.append(p_abs)
+            else:
+                logger.warning(f"Protein file from config not found: {p_abs}")
     protein_files = list(set(protein_files))
 
     # Resolve Ligands
@@ -192,24 +206,32 @@ def main():
                 )
     if "ligands" in cfg:
         for l in cfg["ligands"]:
-            entry = {"id": l["id"]}
+            # Priority to ID from JSON, then filename
+            l_id = l.get("id") or (
+                os.path.splitext(os.path.basename(l["file"]))[0]
+                if "file" in l
+                else "unk"
+            )
+            entry = {"id": l_id}
             if "file" in l:
                 entry["file"] = os.path.abspath(
                     os.path.join(os.path.dirname(config_path), l["file"])
                 )
             if "smiles" in l:
                 entry["smiles"] = l["smiles"]
-
             if not any(lp.get("id") == entry["id"] for lp in ligands_to_prep):
                 ligands_to_prep.append(entry)
 
     if not protein_files or not ligands_to_prep:
-        logger.error(
-            f"No proteins or ligands specified. (Proteins: {len(protein_files)}, Ligands: {len(ligands_to_prep)})"
-        )
-        return
+        if args.resume and found_resumable:
+            logger.info("Workflow finished (all tasks were resumes).")
+            if args.upload:
+                archive_and_finish(outdir, workdir, notifier)
+            return
+        else:
+            logger.error("No valid protein/ligand inputs found to process.")
+            return
 
-    # Change to work directory
     os.chdir(workdir)
     mdp_paths = generate_mdp_files(cfg, workdir)
 
@@ -218,31 +240,26 @@ def main():
     prep_dir = os.path.join(workdir, "md_prep")
     os.makedirs(prep_dir, exist_ok=True)
     for lig in ligands_to_prep:
-        lig_prep_dir = os.path.join(prep_dir, f"ligand_{lig['id']}")
+        lig_id = lig["id"]
+        lig_prep_dir = os.path.join(prep_dir, f"ligand_{lig_id}")
 
-        # The actual name used inside acpype is the basename of the input file
-        if "file" in lig:
-            base_name = os.path.splitext(os.path.basename(lig["file"]))[0]
-        else:
-            base_name = lig["id"]
-
-        acpype_dir = os.path.join(lig_prep_dir, f"{base_name}.acpype")
-        itp_file = os.path.abspath(os.path.join(acpype_dir, f"{base_name}_GMX.itp"))
-        gro_file = os.path.abspath(os.path.join(acpype_dir, f"{base_name}_GMX.gro"))
-
-        if os.path.exists(itp_file) and os.path.exists(gro_file):
-            logger.info(f"--- Ligand {lig['id']} already prepared. Skipping. ---")
-            ligand_data[lig["id"]] = {"itp": itp_file, "gro": gro_file}
-            continue
-
-        if args.skip_prep:
-            logger.warning(
-                f"--- Skipping preparation for ligand {lig['id']} as requested (Files missing!) ---"
+        # Check if already done or if we can skip
+        if any(
+            os.path.exists(os.path.join(outdir, f"{p_id}_{lig_id}_md.gro"))
+            for p_id in [
+                os.path.splitext(os.path.basename(pf))[0] for pf in protein_files
+            ]
+        ):
+            logger.info(
+                f"Complex with ligand {lig_id} already exists in outdir. Skipping ligand prep."
             )
             continue
 
-        logger.info(f"--- Preparing Topology for Ligand {lig['id']} ---")
-        if "file" in lig:
+        if args.skip_prep:
+            continue
+
+        logger.info(f"Preparing topology for ligand {lig_id}")
+        if "file" in lig and os.path.exists(lig["file"]):
             itp, gro = prepare_ligand_from_file(
                 lig["file"],
                 lig_prep_dir,
@@ -250,91 +267,42 @@ def main():
                 smiles=lig.get("smiles"),
                 cpus=args.cpus,
             )
-        else:
+        elif "smiles" in lig:
             itp, gro = prepare_ligand(
-                lig["id"],
-                lig["smiles"],
-                lig_prep_dir,
-                run_command,
-                cpus=args.cpus,
+                lig["id"], lig["smiles"], lig_prep_dir, run_command, cpus=args.cpus
             )
-        if itp and gro:
-            ligand_data[lig["id"]] = {"itp": itp, "gro": gro}
+        else:
+            logger.warning(f"Cannot prepare ligand {lig_id}: file/smiles missing.")
+            continue
 
-    # Main Loop
+        if itp and gro:
+            ligand_data[lig_id] = {"itp": itp, "gro": gro}
+
+    # Main Prep+Sim Loop
     for prot_input in protein_files:
         prot_id = os.path.splitext(os.path.basename(prot_input))[0]
-        prot_file = os.path.join(workdir, f"{prot_id}.pdb")
-
-        if os.path.exists(prot_file):
-            logger.info(f"--- Protein {prot_id} already prepared. Skipping. ---")
-        elif args.skip_prep:
-            logger.warning(
-                f"--- Skipping complex for protein {prot_id} as requested (Protein file missing!) ---"
-            )
+        prot_file, _ = prepare_protein(prot_input, workdir)
+        if not prot_file:
             continue
-        else:
-            prot_file, prot_id = prepare_protein(prot_input, workdir)
-            if not prot_file:
-                continue
 
         for lig_id, lig_paths in ligand_data.items():
-            if lig_id.startswith(prot_id + "_"):
-                complex_name = lig_id
-            else:
-                complex_name = f"{prot_id}_{lig_id}"
-
-            # Skip if already done
-            final_gro_marker = os.path.join(outdir, f"{complex_name}_md.gro")
-            if os.path.exists(final_gro_marker):
-                logger.info(
-                    f"--- Skipping Complex: {complex_name} (Already processed) ---"
-                )
+            complex_name = f"{prot_id}_{lig_id}"
+            if os.path.exists(os.path.join(outdir, f"{complex_name}_md.gro")):
                 continue
 
-            # Smart Resume: Check if we can skip to Production MD
-            md_cpt = os.path.join(outdir, f"{complex_name}_md.cpt")
-            md_tpr = os.path.join(outdir, f"{complex_name}_md.tpr")
-            skip_equil = args.resume and (
-                os.path.exists(md_cpt) or os.path.exists(md_tpr)
-            )
+            logger.info(f"--- Setting up complex: {complex_name} ---")
+            try:
+                prot_gro_raw = os.path.join(workdir, f"{complex_name}_prot_raw.gro")
+                prot_top = os.path.join(workdir, f"{complex_name}_prot.top")
 
-            logger.info(f"--- Processing Complex: {complex_name} ---")
-
-            # 1. Run pdb2gmx
-            prot_gro_raw = os.path.join(workdir, f"{complex_name}_prot_raw.gro")
-            prot_top = os.path.join(workdir, f"{complex_name}_prot.top")
-            final_cpt = None  # Initialize
-
-            if skip_equil and os.path.exists(prot_top):
-                logger.info(
-                    f"--- Resuming MD for {complex_name}: Skipping Prep/Equilibration ---"
-                )
-                # Attempt to find the last successful gro/cpt files for grompp backup
-                final_gro, final_cpt = None, None
-                for step in ["npt", "nvt", "em"]:
-                    # Try workdir then outdir
-                    for search_dir in [workdir, outdir]:
-                        pg = os.path.join(search_dir, f"{complex_name}_{step}.gro")
-                        pc = os.path.join(search_dir, f"{complex_name}_{step}.cpt")
-                        if os.path.exists(pg):
-                            final_gro = pg
-                            if os.path.exists(pc):
-                                final_cpt = pc
-                            break
-                    if final_gro:
-                        break
-            else:
-                logger.info(f"--- Running pdb2gmx for {complex_name} ---")
                 if not run_gmx(
                     [
                         "pdb2gmx",
                         "-ff",
-                        cfg["force_field"],
+                        cfg.get("force_field", "amber99sb-ildn"),
                         "-water",
-                        cfg["water_model"],
+                        cfg.get("water_model", "tip3p"),
                         "-ignh",
-                        "-missing",
                     ],
                     input_files={"-f": prot_file},
                     output_files={"-o": prot_gro_raw, "-p": prot_top},
@@ -344,104 +312,65 @@ def main():
                     cwd=workdir,
                     cpus=args.cpus,
                 ):
-                    logger.error(f"ERROR: pdb2gmx failed for {complex_name}. Skipping.")
                     continue
 
-                # 2. Repair pdb2gmx output in-place
                 fix_gro(prot_gro_raw)
-
-                # Ensure unique posre.itp per complex
                 handle_posre(prot_top, workdir, complex_name)
-
                 complex_gro = os.path.join(workdir, f"{complex_name}_complex.gro")
-                try:
-                    # 4. Merge protein and ligand
-                    lig_itp_local = os.path.join(
-                        workdir, os.path.basename(lig_paths["itp"])
-                    )
-                    shutil.copy(lig_paths["itp"], lig_itp_local)
+                lig_itp_local = os.path.join(
+                    workdir, os.path.basename(lig_paths["itp"])
+                )
+                shutil.copy(lig_paths["itp"], lig_itp_local)
+                merge_complex(prot_gro_raw, lig_paths["gro"], complex_gro)
+                update_topology(prot_top, lig_itp_local, workdir)
 
-                    merge_complex(prot_gro_raw, lig_paths["gro"], complex_gro)
-                    update_topology(prot_top, lig_itp_local, workdir)
+                final_gro = setup_system(
+                    complex_gro,
+                    prot_top,
+                    complex_name,
+                    cfg,
+                    outdir,
+                    workdir,
+                    use_docker=args.docker,
+                    image=args.image,
+                    host_root=host_root,
+                    cpus=args.cpus,
+                )
 
-                    final_gro = setup_system(
-                        complex_gro,
-                        prot_top,
-                        complex_name,
-                        cfg,
-                        outdir,
-                        workdir,
-                        use_docker=args.docker,
-                        image=args.image,
-                        host_root=host_root,
-                        cpus=args.cpus,
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"ERROR: Preparation failed for {complex_name}: {e}. Skipping to next complex."
-                    )
-                    continue
-
-            # Simulation Steps
-            try:
-                gro, cpt = None, None
-
-                if not skip_equil:
-                    logger.info(f"Starting EM for {complex_name}...")
-                    gro, cpt = run_step(
-                        "em",
-                        mdp_paths["em.mdp"],
-                        final_gro,
-                        prot_top,
-                        complex_name,
-                        outdir,
-                        workdir,
-                        gpu=args.gpu,
-                        use_docker=args.docker,
-                        image=args.image,
-                        host_root=host_root,
-                        cpus=args.cpus,
-                    )
-
-                    logger.info(f"Starting NVT for {complex_name}...")
-                    gro, cpt = run_step(
-                        "nvt",
-                        mdp_paths["nvt.mdp"],
-                        gro,
-                        prot_top,
-                        complex_name,
-                        outdir,
-                        workdir,
-                        gpu=args.gpu,
-                        use_docker=args.docker,
-                        image=args.image,
-                        host_root=host_root,
-                        cpus=args.cpus,
-                    )
-
-                    logger.info(f"Starting NPT for {complex_name}...")
-                    gro, cpt = run_step(
-                        "npt",
-                        mdp_paths["npt.mdp"],
-                        gro,
-                        prot_top,
-                        complex_name,
-                        outdir,
-                        workdir,
-                        gpu=args.gpu,
-                        prev_cpt=cpt,
-                        use_docker=args.docker,
-                        image=args.image,
-                        host_root=host_root,
-                        cpus=args.cpus,
-                    )
-                else:
-                    # For MD resume, we use the TPR we already have,
-                    # but we provide final_gro/final_cpt just in case grompp needs to rerun
-                    gro = final_gro
-                    cpt = final_cpt
-
-                logger.info(f"Starting Production MD for {complex_name}...")
+                gro, cpt = run_step(
+                    "em",
+                    mdp_paths["em.mdp"],
+                    final_gro,
+                    prot_top,
+                    complex_name,
+                    outdir,
+                    workdir,
+                    gpu=args.gpu,
+                    cpus=args.cpus,
+                )
+                gro, cpt = run_step(
+                    "nvt",
+                    mdp_paths["nvt.mdp"],
+                    gro,
+                    prot_top,
+                    complex_name,
+                    outdir,
+                    workdir,
+                    gpu=args.gpu,
+                    cpus=args.cpus,
+                )
+                gro, cpt = run_step(
+                    "npt",
+                    mdp_paths["npt.mdp"],
+                    gro,
+                    prot_top,
+                    complex_name,
+                    outdir,
+                    workdir,
+                    gpu=args.gpu,
+                    prev_cpt=cpt,
+                    cpus=args.cpus,
+                )
                 run_step(
                     "md",
                     mdp_paths["md.mdp"],
@@ -452,30 +381,33 @@ def main():
                     workdir,
                     gpu=args.gpu,
                     prev_cpt=cpt,
+                    cpus=args.cpus,
+                    notifier=notifier,
+                )
+                concatenate_trajectories(
+                    complex_name,
+                    outdir,
                     use_docker=args.docker,
                     image=args.image,
                     host_root=host_root,
-                    cpus=args.cpus,
-                    notify_interval=args.notify_interval,
-                    notifier=notifier,
                 )
-
-                logger.info(f"Successfully completed MD for {complex_name}.")
-
-                # Copy results
-                final_files = glob.glob(os.path.join(workdir, f"{complex_name}*"))
-                for f in final_files:
-                    shutil.copy(f, outdir)
-
             except Exception as e:
-                logger.error(
-                    f"ERROR: Simulation failed for {complex_name}: {e}. Skipping to next complex."
-                )
-                continue
+                logger.error(f"Error in complex {complex_name}: {e}")
 
-    # Auto-upload if requested
     if args.upload:
-        archive_and_upload(outdir)
+        archive_and_finish(outdir, workdir, notifier)
+
+
+def archive_and_finish(outdir, workdir, notifier):
+    import datetime
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    archive_name = f"results_{timestamp}.zip"
+    archive_path = os.path.join(workdir, archive_name)
+    shutil.make_archive(archive_path.replace(".zip", ""), "zip", outdir)
+    url = archive_and_upload(archive_path)
+    if url and notifier:
+        notifier.notify_all(f"Workflow Complete: {url}")
 
 
 if __name__ == "__main__":

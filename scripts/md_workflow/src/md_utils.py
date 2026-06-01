@@ -138,6 +138,43 @@ gen_vel                 = no
     return mdp_paths
 
 
+def concatenate_trajectories(output_prefix, outdir, use_docker=False, image=None, host_root=None, cpus=None):
+    """Concatenates all XTC parts found in outdir for a given prefix."""
+    import glob
+    
+    # GROMACS creates parts like complex_md.part0001.xtc when using -noappend
+    search_pattern = os.path.join(outdir, f"{output_prefix}_md*.xtc")
+    xtc_parts = sorted(glob.glob(search_pattern))
+    
+    if len(xtc_parts) <= 1:
+        logger.info(f"Only {len(xtc_parts)} trajectory part found. No concatenation needed.")
+        return
+        
+    logger.info(f"Found {len(xtc_parts)} trajectory parts for {output_prefix}. Concatenating...")
+    
+    final_xtc = os.path.abspath(os.path.join(outdir, f"{output_prefix}_md_combined.xtc"))
+    
+    # Prepare trjcat arguments
+    trjcat_args = ["trjcat", "-f"] + xtc_parts + ["-o", final_xtc]
+    
+    if run_gmx(
+        trjcat_args,
+        use_docker=use_docker,
+        image=image,
+        host_root=host_root,
+        cwd=outdir,
+        cpus=cpus
+    ):
+        logger.info(f"Successfully concatenated trajectories into {final_xtc}")
+        # Optionally, move the combined one to the main name
+        main_xtc = os.path.abspath(os.path.join(outdir, f"{output_prefix}_md.xtc"))
+        if os.path.exists(main_xtc):
+            backup_name = main_xtc + ".orig"
+            shutil.move(main_xtc, backup_name)
+        shutil.move(final_xtc, main_xtc)
+    else:
+        logger.error(f"Failed to concatenate trajectories for {output_prefix}")
+
 def run_step(
     step_name,
     mdp_path,
@@ -195,7 +232,7 @@ def run_step(
     else:
         cpu_count = os.cpu_count() or 4
         ntomp = os.environ.get("SLURM_CPUS_PER_TASK", str(cpu_count))
-    
+
     md_args = [
         "mdrun",
         "-v",
@@ -212,14 +249,17 @@ def run_step(
 
     # If production MD and checkpoint exists, resume
     if step_name == "md" and os.path.exists(cpt_file):
-        logger.info(f"Existing checkpoint found for {step_name}. Resuming...")
+        logger.info(f"Existing checkpoint found for {step_name}. Resuming with -noappend...")
         md_input["-cpi"] = cpt_file
+        md_args.append("-noappend")
 
     # Detect GROMACS build type (OpenCL vs CUDA)
     is_opencl = False
     try:
         # Check GROMACS version once
-        result = subprocess.run(["gmx", "mdrun", "-version"], capture_output=True, text=True)
+        result = subprocess.run(
+            ["gmx", "mdrun", "-version"], capture_output=True, text=True
+        )
         if "OpenCL" in result.stdout:
             is_opencl = True
             logger.info("Detected OpenCL GROMACS build.")
@@ -231,11 +271,11 @@ def run_step(
     if gpu and step_name != "em":
         # -nb gpu and -pme gpu provide the most significant speedup.
         md_args.extend(["-nb", "gpu", "-pme", "gpu"])
-        
+
         if not is_opencl:
             # For modern CUDA (RTX 30/40/50), bonded GPU is usually stable.
             # We keep update on CPU for widest compatibility unless specified.
-            md_args.extend(["-bonded", "gpu", "-update", "cpu"]) 
+            md_args.extend(["-bonded", "gpu", "-update", "cpu"])
         else:
             md_args.extend(["-bonded", "cpu", "-update", "cpu"])
     elif gpu and step_name == "em":

@@ -11,19 +11,24 @@ export GMX_ENABLE_DIRECT_GPU_COMM=1
 export GMX_GPU_PME_PP_COMMS=1
 export GMX_GPU_DD_COMMS=1
 
-echo "--- GPU Pre-flight Check ---"
-if [ "$USE_GPU" = "true" ]; then
-  # Verify NVIDIA visibility
-  if command -v nvidia-smi &>/dev/null; then
-    nvidia-smi -L
-  else
-    echo "Warning: nvidia-smi not found. GPU may not be accessible."
-  fi
-
-  # Run GROMACS test simulation
-  python3 /app/test_gpu.py || exit 1
+if [ "$PREFLIGHT_CHECK" = "false" ]; then
+  echo "Skipping GPU test (PREFLIGHT_CHECK=false)"
+  echo "Only skip if you sure about the environment!"
 else
-  echo "Skipping GPU test (USE_GPU=false)"
+  if [ "$USE_GPU" = "true" ]; then
+    echo "--- GPU Pre-flight Check ---"
+    # Verify NVIDIA visibility
+    if command -v nvidia-smi &>/dev/null; then
+      nvidia-smi -L
+    else
+      echo "Warning: nvidia-smi not found. GPU may not be accessible."
+    fi
+
+    # Run GROMACS test simulation
+    python3 /app/test_gpu.py || exit 1
+  else
+    echo "Skipping GPU test (USE_GPU=false)"
+  fi
 fi
 
 echo "--- MD Workflow Container Started ---"
@@ -56,13 +61,23 @@ if [ "$UPLOAD_RESULTS" = "true" ]; then
 fi
 
 if [ "$RESUME" = "1" ] || [ "$RESUME" = "true" ]; then
-  CMD_ARGS="$CMD_ARGS --resume"
+  CMD_ARGS="$CMD_ARGS --resume --skip-prep"
   echo "Resume mode enabled."
 fi
 
-# Run the smoke test to ensure everything is perfect before main workflow
-echo "--- Running Pipeline Smoke Test ---"
-/bin/bash /app/run_smoke_test.sh
+if [ -n "$EXTRA_ARGS" ]; then
+  CMD_ARGS="$CMD_ARGS $EXTRA_ARGS"
+  echo "Found extra arguments.: $EXTRA_ARGS"
+fi
+
+if [ "$PREFLIGHT_CHECK" = "true" ]; then
+  # Run the smoke test to ensure everything is perfect before main workflow
+  echo "--- Running Pipeline Smoke Test ---"
+  /bin/bash /app/run_smoke_test.sh
+else
+  echo "Skipping smoke test (PREFLIGHT_CHECK=false)"
+  echo "Only skip if you sure about the environment!"
+fi
 
 # Main execution
 echo "--- Starting Main MD Workflow ---"
@@ -75,5 +90,5 @@ if [ "$UPLOAD_RESULTS" = "true" ]; then
 fi
 python3 /app/post_md.py $POST_ARGS
 
-echo "--- MD Workflow Container Completed ---"
+echo "--- MD Workflow Completed ---"
 echo "Results are available in: $OUTDIR"

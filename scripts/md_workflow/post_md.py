@@ -305,7 +305,8 @@ def main():
                 protein_ids.append(os.path.splitext(os.path.basename(p))[0])
         if "proteins" in cfg:
             for p in cfg["proteins"]:
-                protein_ids.append(p.get("id", os.path.splitext(os.path.basename(p["file"]))[0]))
+                # Consistently use filename base for protein IDs as md_workflow.py does
+                protein_ids.append(os.path.splitext(os.path.basename(p["file"]))[0])
         
         ligand_ids = []
         if args.ligand:
@@ -313,7 +314,10 @@ def main():
                 ligand_ids.append(os.path.splitext(os.path.basename(l))[0])
         if "ligands" in cfg:
             for l in cfg["ligands"]:
-                ligand_ids.append(l["id"])
+                if "file" in l:
+                    ligand_ids.append(os.path.splitext(os.path.basename(l["file"]))[0])
+                else:
+                    ligand_ids.append(l.get("id", "unknown"))
 
         protein_ids = list(set(protein_ids))
         ligand_ids = list(set(ligand_ids))
