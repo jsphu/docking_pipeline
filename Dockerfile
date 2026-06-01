@@ -83,6 +83,7 @@ ENV CONFIG_FILE=/app/data/6NJS.json
 ENV OUTDIR=/results
 ENV WORKDIR=/work
 ENV USE_GPU=true
+ENV RESUME=0
 
 # Create necessary directories
 RUN mkdir -p /results /work /app/data

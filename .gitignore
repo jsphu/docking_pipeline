@@ -18,3 +18,5 @@ data/
 data*/
 data*
 .trash/
+
+.env

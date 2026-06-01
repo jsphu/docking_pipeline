@@ -16,6 +16,8 @@ from src.top_utils import (
     fix_gro,
 )
 from src.logger_utils import setup_logger
+from src.transfer_utils import archive_and_upload
+from src.notify_utils import Notifier
 
 # Setup Global Root Logger
 setup_logger()
@@ -49,6 +51,10 @@ def get_files(path, extensions):
 
 
 def main():
+    # Detect default CPU limit
+    cpu_count = os.cpu_count() or 1
+    default_cpus = min(cpu_count, 16)
+
     parser = argparse.ArgumentParser(
         description="Automated MD Workflow for Protein-Ligand Complexes"
     )
@@ -78,7 +84,31 @@ def main():
         "--image", default="nvcr.io/hpc/gromacs:2023.2", help="Docker image"
     )
     parser.add_argument(
-        "--skip-prep", action="store_true", help="Skip ligand and protein preparation steps"
+        "--skip-prep",
+        action="store_true",
+        help="Skip ligand and protein preparation steps",
+    )
+    parser.add_argument(
+        "--cpus",
+        type=int,
+        default=default_cpus,
+        help=f"Maximum number of CPUs for GROMACS (Default: {default_cpus})",
+    )
+    parser.add_argument(
+        "--upload",
+        action="store_true",
+        help="Archive results and upload to external service",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from production MD if checkpoint file exists",
+    )
+    parser.add_argument(
+        "--notify-interval",
+        type=int,
+        default=0,
+        help="Interval in seconds for progress notifications (Default: 0, disabled)",
     )
 
     args = parser.parse_args()
@@ -118,6 +148,7 @@ def main():
     cfg.setdefault("box_type", "cubic")
     cfg.setdefault("force_field", "amber99sb-ildn")
     cfg.setdefault("water_model", "tip3p")
+    cfg.setdefault("notifications", {})
     cfg.setdefault("cutoff_scheme", "Verlet")
     cfg.setdefault("coulombtype", "PME")
     cfg.setdefault("rcoulomb", 1.0)
@@ -134,6 +165,9 @@ def main():
     cfg.setdefault("pcoupl", "Parrinello-Rahman")
     cfg.setdefault("pcoupltype", "isotropic")
     cfg.setdefault("compressibility", "4.5e-5")
+
+    # Initialize Notifier if interval is set
+    notifier = Notifier(cfg.get("notifications", {})) if args.notify_interval > 0 else None
 
     # Resolve Proteins
     protein_files = []
@@ -198,13 +232,14 @@ def main():
 
         if os.path.exists(itp_file) and os.path.exists(gro_file):
             logger.info(f"--- Ligand {lig['id']} already prepared. Skipping. ---")
-            ligand_data[lig['id']] = {"itp": itp_file, "gro": gro_file}
+            ligand_data[lig["id"]] = {"itp": itp_file, "gro": gro_file}
             continue
 
         if args.skip_prep:
-            logger.warning(f"--- Skipping preparation for ligand {lig['id']} as requested (Files missing!) ---")
+            logger.warning(
+                f"--- Skipping preparation for ligand {lig['id']} as requested (Files missing!) ---"
+            )
             continue
-
 
         logger.info(f"--- Preparing Topology for Ligand {lig['id']} ---")
         if "file" in lig:
@@ -213,6 +248,7 @@ def main():
                 lig_prep_dir,
                 run_command,
                 smiles=lig.get("smiles"),
+                cpus=args.cpus,
             )
         else:
             itp, gro = prepare_ligand(
@@ -220,6 +256,7 @@ def main():
                 lig["smiles"],
                 lig_prep_dir,
                 run_command,
+                cpus=args.cpus,
             )
         if itp and gro:
             ligand_data[lig["id"]] = {"itp": itp, "gro": gro}
@@ -232,7 +269,9 @@ def main():
         if os.path.exists(prot_file):
             logger.info(f"--- Protein {prot_id} already prepared. Skipping. ---")
         elif args.skip_prep:
-            logger.warning(f"--- Skipping complex for protein {prot_id} as requested (Protein file missing!) ---")
+            logger.warning(
+                f"--- Skipping complex for protein {prot_id} as requested (Protein file missing!) ---"
+            )
             continue
         else:
             prot_file, prot_id = prepare_protein(prot_input, workdir)
@@ -252,21 +291,25 @@ def main():
                     f"--- Skipping Complex: {complex_name} (Already processed) ---"
                 )
                 continue
-            
+
             # Smart Resume: Check if we can skip to Production MD
             md_cpt = os.path.join(outdir, f"{complex_name}_md.cpt")
             md_tpr = os.path.join(outdir, f"{complex_name}_md.tpr")
-            skip_equil = os.path.exists(md_cpt) or os.path.exists(md_tpr)
+            skip_equil = args.resume and (
+                os.path.exists(md_cpt) or os.path.exists(md_tpr)
+            )
 
             logger.info(f"--- Processing Complex: {complex_name} ---")
 
             # 1. Run pdb2gmx
             prot_gro_raw = os.path.join(workdir, f"{complex_name}_prot_raw.gro")
             prot_top = os.path.join(workdir, f"{complex_name}_prot.top")
-            final_cpt = None # Initialize
-            
+            final_cpt = None  # Initialize
+
             if skip_equil and os.path.exists(prot_top):
-                logger.info(f"--- Resuming MD for {complex_name}: Skipping Prep/Equilibration ---")
+                logger.info(
+                    f"--- Resuming MD for {complex_name}: Skipping Prep/Equilibration ---"
+                )
                 # Attempt to find the last successful gro/cpt files for grompp backup
                 final_gro, final_cpt = None, None
                 for step in ["npt", "nvt", "em"]:
@@ -299,26 +342,13 @@ def main():
                     image=args.image,
                     host_root=host_root,
                     cwd=workdir,
+                    cpus=args.cpus,
                 ):
                     logger.error(f"ERROR: pdb2gmx failed for {complex_name}. Skipping.")
                     continue
 
                 # 2. Repair pdb2gmx output in-place
                 fix_gro(prot_gro_raw)
-
-                # 3. Center the repaired protein to get a GOOD reference frame
-                prot_gro = os.path.join(workdir, f"{complex_name}_prot.gro")
-                if not run_gmx(
-                    ["editconf", "-c"],
-                    input_files={"-f": prot_gro_raw},
-                    output_files={"-o": prot_gro},
-                    use_docker=args.docker,
-                    image=args.image,
-                    host_root=host_root,
-                    cwd=workdir,
-                ):
-                    logger.error(f"ERROR: editconf centering failed for {complex_name}. Skipping.")
-                    continue
 
                 # Ensure unique posre.itp per complex
                 handle_posre(prot_top, workdir, complex_name)
@@ -331,7 +361,7 @@ def main():
                     )
                     shutil.copy(lig_paths["itp"], lig_itp_local)
 
-                    merge_complex(prot_gro, lig_paths["gro"], complex_gro)
+                    merge_complex(prot_gro_raw, lig_paths["gro"], complex_gro)
                     update_topology(prot_top, lig_itp_local, workdir)
 
                     final_gro = setup_system(
@@ -344,6 +374,7 @@ def main():
                         use_docker=args.docker,
                         image=args.image,
                         host_root=host_root,
+                        cpus=args.cpus,
                     )
                 except Exception as e:
                     logger.error(
@@ -354,7 +385,7 @@ def main():
             # Simulation Steps
             try:
                 gro, cpt = None, None
-                
+
                 if not skip_equil:
                     logger.info(f"Starting EM for {complex_name}...")
                     gro, cpt = run_step(
@@ -369,6 +400,7 @@ def main():
                         use_docker=args.docker,
                         image=args.image,
                         host_root=host_root,
+                        cpus=args.cpus,
                     )
 
                     logger.info(f"Starting NVT for {complex_name}...")
@@ -384,6 +416,7 @@ def main():
                         use_docker=args.docker,
                         image=args.image,
                         host_root=host_root,
+                        cpus=args.cpus,
                     )
 
                     logger.info(f"Starting NPT for {complex_name}...")
@@ -400,9 +433,10 @@ def main():
                         use_docker=args.docker,
                         image=args.image,
                         host_root=host_root,
+                        cpus=args.cpus,
                     )
                 else:
-                    # For MD resume, we use the TPR we already have, 
+                    # For MD resume, we use the TPR we already have,
                     # but we provide final_gro/final_cpt just in case grompp needs to rerun
                     gro = final_gro
                     cpt = final_cpt
@@ -421,6 +455,9 @@ def main():
                     use_docker=args.docker,
                     image=args.image,
                     host_root=host_root,
+                    cpus=args.cpus,
+                    notify_interval=args.notify_interval,
+                    notifier=notifier,
                 )
 
                 logger.info(f"Successfully completed MD for {complex_name}.")
@@ -435,6 +472,10 @@ def main():
                     f"ERROR: Simulation failed for {complex_name}: {e}. Skipping to next complex."
                 )
                 continue
+
+    # Auto-upload if requested
+    if args.upload:
+        archive_and_upload(outdir)
 
 
 if __name__ == "__main__":

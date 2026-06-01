@@ -2,6 +2,7 @@ import os
 import logging
 import subprocess
 from .gmx_utils import run_gmx
+from .notify_utils import ProgressMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,9 @@ def run_step(
     use_docker=False,
     image="nvcr.io/hpc/gromacs:2023.2",
     host_root=None,
+    cpus=None,
+    notify_interval=None,
+    notifier=None,
 ):
     """Runs a single GROMACS step using direct gmx calls (supporting Docker)."""
     target_dir = outdir if step_name == "md" else workdir
@@ -174,18 +178,23 @@ def run_step(
             image=image,
             host_root=host_root,
             cwd=target_dir,
+            cpus=cpus,
         ):
             raise RuntimeError(f"grompp ({step_name}) failed")
 
     md_out_base = f"{output_prefix}_{step_name}"
     md_out_abs = os.path.abspath(os.path.join(target_dir, md_out_base))
     cpt_file = f"{md_out_abs}.cpt"
+    log_file = f"{md_out_abs}.log"
 
     # Optimization for single-node/single-GPU (e.g. Salad Cloud or WSL)
     # -ntmpi 1: Single MPI rank is most stable for GPU offloading on a single node
     # Detect available CPU cores
-    cpu_count = os.cpu_count() or 4
-    ntomp = os.environ.get("SLURM_CPUS_PER_TASK", str(cpu_count))
+    if cpus:
+        ntomp = str(cpus)
+    else:
+        cpu_count = os.cpu_count() or 4
+        ntomp = os.environ.get("SLURM_CPUS_PER_TASK", str(cpu_count))
     
     md_args = [
         "mdrun",
@@ -233,25 +242,38 @@ def run_step(
         # Energy minimization often fails on GPU due to extreme forces; CPU is safer.
         md_args.extend(["-nb", "cpu"])
 
-    if not run_gmx(
-        md_args,
-        input_files=md_input,
-        use_docker=use_docker,
-        image=image,
-        host_root=host_root,
-        cwd=target_dir,
-    ):
-        if not use_docker:
-            logger.warning("Warning: GPU failed locally, falling back to CPU...")
-            # Simple CPU fallback for local runs
-            if not run_gmx(
-                ["mdrun", "-deffnm", md_out_abs],
-                input_files={"-s": tpr},
-                cwd=target_dir,
-            ):
-                raise RuntimeError(f"mdrun ({step_name}) failed on CPU")
-        else:
-            # In Docker/Salad environment, we don't want a silent CPU fallback if GPU fails
-            raise RuntimeError(f"mdrun ({step_name}) failed in GPU mode")
+    # Start Progress Monitor if it's production MD and interval is set
+    monitor = None
+    if step_name == "md" and notify_interval and notifier:
+        monitor = ProgressMonitor(log_file, output_prefix, notify_interval, notifier)
+        monitor.start()
+
+    try:
+        if not run_gmx(
+            md_args,
+            input_files=md_input,
+            use_docker=use_docker,
+            image=image,
+            host_root=host_root,
+            cwd=target_dir,
+            cpus=cpus,
+        ):
+            if not use_docker:
+                logger.warning("Warning: GPU failed locally, falling back to CPU...")
+                # Simple CPU fallback for local runs
+                if not run_gmx(
+                    ["mdrun", "-deffnm", md_out_abs],
+                    input_files={"-s": tpr},
+                    cwd=target_dir,
+                    cpus=cpus,
+                ):
+                    raise RuntimeError(f"mdrun ({step_name}) failed on CPU")
+            else:
+                # In Docker/Salad environment, we don't want a silent CPU fallback if GPU fails
+                raise RuntimeError(f"mdrun ({step_name}) failed in GPU mode")
+    finally:
+        if monitor:
+            monitor.stop()
+            monitor.join()
 
     return os.path.abspath(f"{md_out_abs}.gro"), os.path.abspath(f"{md_out_abs}.cpt")

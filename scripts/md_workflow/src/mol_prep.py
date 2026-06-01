@@ -54,7 +54,7 @@ def fix_smiles(smiles):
     return fixed
 
 
-def prepare_ligand(ligand_name, smiles, output_dir, run_command_func):
+def prepare_ligand(ligand_name, smiles, output_dir, run_command_func, cpus=None):
     """
     Prepares ligand topology using RDKit for 3D prep and acpype for GMX topology.
     """
@@ -86,9 +86,9 @@ def prepare_ligand(ligand_name, smiles, output_dir, run_command_func):
             ligand_name,
         ],
         cwd=output_dir,
+        cpus=cpus,
     ):
         return None, None
-    ...
 
     acpype_out_dir = os.path.join(output_dir, f"{ligand_name}.acpype")
     itp_file = os.path.abspath(os.path.join(acpype_out_dir, f"{ligand_name}_GMX.itp"))
@@ -137,7 +137,7 @@ def extract_first_model_pdbqt(pdbqt_file, output_file):
         f.writelines(model_lines)
 
 
-def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func, smiles=None):
+def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func, smiles=None, cpus=None):
     """
     Prepares ligand topology while strictly preserving the 3D coordinates (pose).
     Uses a template-based approach to fix bond orders and hydrogens.
@@ -266,6 +266,7 @@ def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func, smiles=N
             "-f",
         ],
         cwd=output_dir,
+        cpus=cpus,
     ):
         # Even if acpype fails, try to return something if possible or just log error
         logger.error(f"Critical: acpype failed for {ligand_name} even with fallback.")
@@ -280,9 +281,9 @@ def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func, smiles=N
     return None, None
 
 
-def prepare_ligand_from_file(ligand_file, output_dir, run_command_func, smiles=None):
+def prepare_ligand_from_file(ligand_file, output_dir, run_command_func, smiles=None, cpus=None):
     """
     Handles ligand preparation. If it's a coordinate-based file (PDBQT/MOL2),
     it preserves the pose.
     """
-    return prepare_ligand_from_pose(ligand_file, output_dir, run_command_func, smiles=smiles)
+    return prepare_ligand_from_pose(ligand_file, output_dir, run_command_func, smiles=smiles, cpus=cpus)

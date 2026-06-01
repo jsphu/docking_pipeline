@@ -1,91 +1,130 @@
-# Molecular Dynamics & Analysis Workflow
+# Automated Molecular Dynamics & Analysis Pipeline
 
-A fully automated suite for Protein-Ligand Molecular Dynamics simulations and post-simulation analysis using GROMACS.
-
-## Features
-
-- **Automated Simulation (`md_workflow.py`)**: Handles protein/ligand preparation, box setup, solvation, ionization, and equilibration (EM, NVT, NPT) followed by production MD.
-- **Advanced Post-Analysis (`post_md.py`)**: Automated trajectory processing (PBC correction, fitting) and standard MD analysis.
-- **Visual Reports**: Generates standalone, self-contained HTML reports for every complex, including high-quality plots for RMSD, RMSF, Radius of Gyration, and Hydrogen Bonds.
-- **Smart Resume**: Supports resuming simulations and skipping already processed complexes.
-- **Docker Integration**: Runs GROMACS via Docker with GPU support for easy setup and high performance.
+A professional-grade, fully automated suite for Protein-Ligand Molecular Dynamics (MD) simulations and post-simulation analysis using GROMACS, Docker, and Python.
 
 ---
 
-## Installation & Requirements
+## Core Features
 
-- Python 3.8+
-- Docker (for GROMACS execution)
-- Python Packages: `matplotlib`, `numpy`, `rdkit` (if preparing ligands from SMILES)
+- **End-to-End Automation:** From raw PDB/SDF files to polished HTML comparison reports.
+- **Adaptive Chunked Upload:** Automatically splits massive results into 512MB/128MB/64MB parts for 100% transfer reliability.
+- **Smart Progress Monitor:** Real-time progress updates (ns) sent via **Email (Gmail)** or **Telegram**.
+- **Master Manifests:** Uses **GitHub Gists** to provide a single, professional link for multi-part downloads.
+- **Resilient Execution:** Smart resume from checkpoints, GPU/CPU auto-fallback, and preparation skipping.
 
 ---
 
-## Workflow Guide
+## Usage: Running MD (`md_workflow.py`)
 
-### 1. Production MD Simulation
+### 1. Basic Run
 
-Run the main workflow to prepare and simulate your complexes. The script reads parameters from `config.json`.
+Processes all protein-ligand pairs defined in your configuration or provided via CLI.
 
 ```bash
-python3 md_workflow.py -c config.json --outdir results --docker
+python3 md_workflow.py --protein prot.pdb --ligand lig_dir/ --outdir results
 ```
 
-### 2. Post-MD Analysis
+### 2. Skipping Preparation
 
-Once the simulation is complete, run the analysis script to process trajectories and generate reports.
+If you have already prepared your protein/ligand topologies and just want to run simulations:
 
 ```bash
-python3 post_md.py --outdir results --docker
+python3 md_workflow.py --skip-prep --outdir results
 ```
 
-This will:
-1. Fix PBC (Periodic Boundary Conditions).
-2. Fit the trajectory to the protein backbone.
-3. Calculate RMSD (Protein & Ligand), RMSF (Protein), Radius of Gyration, and Hydrogen Bonds.
-4. Generate an HTML report in `results/analysis_{complex_name}/`.
+### 3. Smart Resume
+
+If a simulation was interrupted (e.g., cluster timeout), the system detects `.cpt` files and resumes automatically.
+
+```bash
+python3 md_workflow.py --resume --outdir results
+```
+
+### 4. Real-Time Notifications
+
+Monitor your simulation progress (in nanoseconds) at a specific interval.
+
+```bash
+# Notify every 30 minutes (1800 seconds)
+python3 md_workflow.py --notify-interval 1800
+```
+
+*Note: See `NOTIFY_SYSTEM.md` for Email/Telegram setup.*
 
 ---
 
-## Key Components
+## Usage: Post-MD Analysis (`post_md.py`)
 
-### Scripts
-- `md_workflow.py`: The simulation automation engine.
-- `post_md.py`: The analysis automation engine.
-- `plotter.py`: A wrapper for plotting individual XVG files.
+### 1. Full Analysis
 
-### Configuration (`config.json`)
-Controls all simulation parameters:
-- **Force Field & Water Model**: `amber99sb-ildn`, `tip3p`, etc.
-- **Equilibration Steps**: Steps, time-steps, and coupling parameters for EM, NVT, and NPT.
-- **Production MD**: Duration, output frequency (xtc, energy, log).
-- **Environment**: Temperature, pressure, and box settings.
+Performs PBC correction, trajectory fitting, RMSD, RMSF, Rg, and Hydrogen Bond analysis for every completed complex.
 
----
+```bash
+python3 post_md.py --outdir results
+```
 
-## Detailed Usage
+### 2. Selecting Specific Complexes
 
-### `md_workflow.py` Arguments
-- `-c`, `--config`: Path to the JSON configuration file (default: `config.json`).
-- `-o`, `--outdir`: Directory where production results (XTC, TPR, GRO) are saved.
-- `-w`, `--workdir`: Directory for temporary simulation files.
-- `-p`, `--protein`: Protein files (PDB/PDBQT) or directories.
-- `-l`, `--ligand`: Ligand files (SMILES/PDBQT/MOL2) or directories.
-- `--gpu / --no-gpu`: Enable/Disable GPU acceleration.
-- `--docker / --no-docker`: Use Docker container for GROMACS.
+Analyze only a subset of your results:
 
-### `post_md.py` Arguments
-- `-o`, `--outdir`: Directory where simulation results are stored (reads `.xtc` and `.tpr` files).
-- `-p`, `--protein` / `-l`, `--ligand`: (Optional) Specify specific IDs to analyze. If omitted, scans `outdir` automatically.
-- `--docker / --no-docker`: Use Docker for GROMACS analysis tools.
+```bash
+python3 post_md.py --outdir results --select 6NJS_LIG1 6NJS_LIG2
+```
+
+### 3. Master Output Handling
+
+Generate a comparison report comparing all analyzed ligands without re-running GROMACS analysis:
+
+```bash
+python3 post_md.py --outdir results --master-only --master-output final_comparison.html
+```
 
 ---
 
-## Analysis Reports
+## Data Management & Uploads
 
-The `post_md.py` script generates a standalone HTML report for each complex located at:
-`[outdir]/analysis_[complex_name]/report_[complex_name].html`
+### 1. High-Reliability Uploads
 
-**Report Features:**
-- **Self-Contained**: Plots are embedded as Base64 images; no external files needed.
-- **Print to PDF**: Optimized for browser printing. Open the HTML file, press `Ctrl+P`, and "Save as PDF" for a professional report.
-- **Metadata**: Includes force field information and simulation conditions used.
+When the `--upload` flag is used, the system performs an **Adaptive Chunked Upload**:
+
+1. Archives the results directory.
+2. If the file is large, it splits it into chunks.
+3. Uploads chunks to cloud storage (Transfer.sh / BashUpload).
+4. Creates a **GitHub Gist** containing the download links for all parts.
+
+### 2. Enabling GitHub Gists
+
+Export your token before running:
+
+```bash
+export GITHUB_TOKEN="your_token"
+python3 md_workflow.py --upload
+```
+
+---
+
+## Configuration & Environment
+
+### Key Command-Line Flags
+
+| Flag | Description |
+| :--- | :--- |
+| `--resume` | Resume from Production MD checkpoint if it exists. |
+| `--skip-prep` | Skip ligand/protein preparation; use existing topologies. |
+| `--upload` | Archive and upload results (uses Chunking + Gist). |
+| `--notify-interval` | Interval in seconds for progress updates. |
+| `--select` | (Post-MD) List specific complexes to process. |
+| `--master-only` | (Post-MD) Skip GROMACS tools; just build the comparison report. |
+
+### Required Environment Variables
+
+- `GITHUB_TOKEN`: For Master Manifest (Gist) uploads.
+- `SMTP_PASSWORD`: Gmail App Password for email notifications.
+- `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`: For Telegram notifications.
+
+---
+
+## Documentation
+
+- **`NOTIFY_SYSTEM.md`**: Detailed setup for Email, Telegram, and GitHub integration.
+- **`config.json`**: Fine-tune GROMACS parameters (Temperature, Pressure, Nsteps, etc).

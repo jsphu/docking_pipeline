@@ -21,13 +21,16 @@ def setup_acpype_libs():
     return None
 
 
-def run_command(cmd, shell=False, cwd=None, env=None):
+def run_command(cmd, shell=False, cwd=None, env=None, cpus=None):
     """Utility to run shell commands and handle errors."""
     logger.info(f"Running: {' '.join(cmd) if isinstance(cmd, list) else cmd}")
 
     full_env = os.environ.copy()
     if env:
         full_env.update(env)
+    
+    if cpus:
+        full_env["OMP_NUM_THREADS"] = str(cpus)
     
     lib_path = setup_acpype_libs()
     if lib_path:
@@ -57,6 +60,7 @@ def run_gmx(
     use_docker=False,
     image="nvcr.io/hpc/gromacs:2023.2",
     host_root=None,
+    cpus=None,
 ):
     """Utility to run GROMACS commands locally or via Docker."""
     gmx_cmd = ["gmx"] + args
@@ -71,15 +75,21 @@ def run_gmx(
 
     if not use_docker:
         # Fallback to local gmxapi or subprocess
+        full_env = os.environ.copy()
+        if env:
+            full_env.update(env)
+        if cpus:
+            full_env["OMP_NUM_THREADS"] = str(cpus)
+
         if stdin:
             result = subprocess.run(
-                gmx_cmd, input=stdin, capture_output=True, text=True, env=env, cwd=cwd
+                gmx_cmd, input=stdin, capture_output=True, text=True, env=full_env, cwd=cwd
             )
             if result.returncode != 0:
                 logger.error(f"Error: {result.stderr}")
                 return False
             return True
-        return run_command(gmx_cmd, env=env, cwd=cwd)
+        return run_command(gmx_cmd, env=full_env, cwd=cwd, cpus=cpus)
     else:
         # Docker mode
         project_root = host_root or os.getcwd()
@@ -97,6 +107,12 @@ def run_gmx(
             "all",
             "-i",
             "--rm",
+        ]
+        
+        if cpus:
+            docker_base.extend(["--cpus", str(cpus)])
+            
+        docker_base.extend([
             "-v",
             f"{project_root}:/workflow",
             "-w",
@@ -104,7 +120,7 @@ def run_gmx(
             "-u",
             f"{os.getuid()}:{os.getgid()}",
             image,
-        ]
+        ])
 
         # Map all paths in gmx_cmd to be relative to /workflow
         mapped_gmx_cmd = []

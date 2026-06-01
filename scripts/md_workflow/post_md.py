@@ -4,42 +4,16 @@ import glob
 import sys
 import shutil
 import difflib
-import tarfile
-import requests
 from src.config_loader import load_config
 from src.gmx_utils import run_gmx, run_command
 from src.logger_utils import setup_logger
 from src.plotting import plot_xvg, get_xvg_stats
 from src.report_utils import generate_html_report, generate_master_report
+from src.transfer_utils import archive_and_upload
 
 # Setup Logger
 setup_logger()
 logger = setup_logger("post_md")
-
-def zip_results(outdir, zip_name):
-    """Zips the output directory."""
-    logger.info(f"Zipping results in {outdir} to {zip_name}...")
-    with tarfile.open(zip_name, "w:gz") as tar:
-        tar.add(outdir, arcname=os.path.basename(outdir))
-    return zip_name
-
-def upload_to_transfer_sh(file_path):
-    """Uploads a file to transfer.sh and returns the download link."""
-    file_name = os.path.basename(file_path)
-    logger.info(f"Uploading {file_name} to transfer.sh...")
-    try:
-        with open(file_path, 'rb') as f:
-            response = requests.put(f"https://transfer.sh/{file_name}", data=f)
-            if response.status_code == 200:
-                download_link = response.text.strip()
-                logger.info(f"Upload successful! Download link: {download_link}")
-                print(f"DOWNLOAD_LINK={download_link}")
-                return download_link
-            else:
-                logger.error(f"Upload failed with status code {response.status_code}: {response.text}")
-    except Exception as e:
-        logger.error(f"An error occurred during upload: {e}")
-    return None
 
 def get_files(path, extensions):
     """Retrieves files from a path or directory with specific extensions."""
@@ -75,6 +49,7 @@ def get_ligand_group(tpr, complex_name, workdir, args):
         image=args.image,
         host_root=args.host_root,
         cwd=workdir,
+        cpus=args.cpus,
     ):
         return "SOL" # Fallback
 
@@ -143,6 +118,7 @@ def analyze_complex(complex_name, outdir, workdir, cfg, args):
                 image=args.image,
                 host_root=args.host_root,
                 cwd=workdir,
+                cpus=args.cpus,
             )
             plot_xvg(out_path, plot_path)
         
@@ -163,6 +139,7 @@ def analyze_complex(complex_name, outdir, workdir, cfg, args):
             image=args.image,
             host_root=args.host_root,
             cwd=workdir,
+            cpus=args.cpus,
         )
 
     fitted_xtc = os.path.join(analysis_dir, f"{complex_name}_fitted.xtc")
@@ -177,6 +154,7 @@ def analyze_complex(complex_name, outdir, workdir, cfg, args):
             image=args.image,
             host_root=args.host_root,
             cwd=workdir,
+            cpus=args.cpus,
         )
 
     # Identify Ligand Group
@@ -264,6 +242,10 @@ def reconstruct_result(complex_name, outdir):
     }
 
 def main():
+    # Detect default CPU limit
+    cpu_count = os.cpu_count() or 1
+    default_cpus = min(cpu_count, 16)
+
     parser = argparse.ArgumentParser(
         description="Post-MD Analysis Workflow for Protein-Ligand Complexes"
     )
@@ -293,6 +275,12 @@ def main():
     parser.add_argument("--no-docker", action="store_false", dest="docker")
     parser.add_argument(
         "--image", default="nvcr.io/hpc/gromacs:2023.2", help="Docker image"
+    )
+    parser.add_argument(
+        "--cpus", type=int, default=default_cpus, help=f"Maximum number of CPUs for GROMACS (Default: {default_cpus})"
+    )
+    parser.add_argument(
+        "--upload", action="store_true", help="Archive results and upload to external service"
     )
 
     args = parser.parse_args()
@@ -376,18 +364,13 @@ def main():
                 shutil.move(default_path, final_path)
             
             logger.info(f"--- Master Comparison Report Generated: {final_path} ---")
+            
+            # Auto-upload if requested
+            if args.upload:
+                archive_and_upload(outdir)
+                
         else:
             logger.warning("No results collected for master report.")
-
-        # ZIP and UPLOAD
-        zip_file = os.path.join(os.path.dirname(outdir), "simulation_results.tar.gz")
-        zip_results(outdir, zip_file)
-        upload_to_transfer_sh(zip_file)
-
-        logger.info("--- WORKFLOW COMPLETE ---")
-        logger.info("--- Post-MD Analysis and Upload Successful. Terminating Container... ---")
-        sys.exit(0)
-
     finally:
         os.chdir(original_cwd)
 

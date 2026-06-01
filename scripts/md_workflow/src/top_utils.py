@@ -166,7 +166,7 @@ def clean_protein(input_file, output_file):
 
 
 def merge_complex(protein_gro, ligand_gro, output_gro):
-    """Merges protein and ligand while centering both in a reasonable frame."""
+    """Merges protein and ligand while strictly preserving their relative coordinates."""
     fix_gro(protein_gro)
     fix_gro(ligand_gro)
     with open(protein_gro, "r") as f:
@@ -178,33 +178,6 @@ def merge_complex(protein_gro, ligand_gro, output_gro):
 
     pc = int(pl[1].strip())
     lc = int(ll[1].strip())
-
-    def get_com(lines):
-        x, y, z, n = 0, 0, 0, 0
-        for l in lines[2:-1]:
-            if len(l) < 44: continue
-            try:
-                xv = float(l[20:28])
-                yv = float(l[28:36])
-                zv = float(l[36:44])
-                if math.isfinite(xv) and math.isfinite(yv) and math.isfinite(zv):
-                    x += xv
-                    y += yv
-                    z += zv
-                    n += 1
-            except:
-                continue
-        return [x / n, y / n, z / n] if n > 0 else [0, 0, 0]
-
-    pcom = get_com(pl)
-    lcom = get_com(ll)
-
-    # Target center for protein
-    target = [5.0, 5.0, 5.0]
-    p_off = [target[i] - pcom[i] for i in range(3)]
-
-    # Ligand offset to be at the same center as protein
-    l_off = [target[i] - lcom[i] for i in range(3)]
 
     new_lines = ["Merged Complex\n", f"{pc + lc:5d}\n"]
 
@@ -234,9 +207,9 @@ def merge_complex(protein_gro, ligand_gro, output_gro):
                     safe_rnm,
                     safe_anm,
                     ai % 100000,
-                    cap_val(x + p_off[0]),
-                    cap_val(y + p_off[1]),
-                    cap_val(z + p_off[2]),
+                    cap_val(x),
+                    cap_val(y),
+                    cap_val(z),
                 )
             )
         except:
@@ -258,9 +231,9 @@ def merge_complex(protein_gro, ligand_gro, output_gro):
                     safe_rnm,
                     safe_anm,
                     (pc + i + 1) % 100000,
-                    cap_val(x + l_off[0]),
-                    cap_val(y + l_off[1]),
-                    cap_val(z + l_off[2]),
+                    cap_val(x),
+                    cap_val(y),
+                    cap_val(z),
                 )
             )
         except:
@@ -337,6 +310,7 @@ def setup_system(
     use_docker=False,
     image="nvcr.io/hpc/gromacs:2023.2",
     host_root=None,
+    cpus=None,
 ):
     box = os.path.abspath(os.path.join(workdir, f"{output_prefix}_box.gro"))
     if not run_gmx(
@@ -347,6 +321,7 @@ def setup_system(
         image=image,
         host_root=host_root,
         cwd=workdir,
+        cpus=cpus,
     ):
         raise RuntimeError("editconf failed")
     solv = os.path.abspath(os.path.join(workdir, f"{output_prefix}_solv.gro"))
@@ -358,6 +333,7 @@ def setup_system(
         image=image,
         host_root=host_root,
         cwd=workdir,
+        cpus=cpus,
     ):
         raise RuntimeError("solvate failed")
     mdp = os.path.abspath(os.path.join(workdir, "ions.mdp"))
@@ -375,6 +351,7 @@ def setup_system(
         image=image,
         host_root=host_root,
         cwd=workdir,
+        cpus=cpus,
     ):
         raise RuntimeError("grompp (ions) failed")
     final = os.path.abspath(os.path.join(workdir, f"{output_prefix}_final.gro"))
@@ -387,6 +364,7 @@ def setup_system(
         image=image,
         host_root=host_root,
         cwd=workdir,
+        cpus=cpus,
     ):
         raise RuntimeError("genion failed")
     return final
