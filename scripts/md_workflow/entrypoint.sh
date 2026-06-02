@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 
+# Cleanup function to kill background server
+cleanup() {
+  echo "--- Stopping Web Server (PID: $SERVER_PID) ---"
+  kill $SERVER_PID || true
+}
+trap cleanup EXIT
+
 # FORCE TERMINAL TO USE THE MICROMAMBA ENVIRONMENT PATHS EXPANSION
 export MAMBA_ROOT_PREFIX=/root/micromamba
 export PATH="/root/micromamba/envs/md_env/bin:/usr/local/bin:$PATH"
@@ -40,6 +47,11 @@ echo "GPU: $USE_GPU"
 # Ensure directories exist
 mkdir -p "$OUTDIR"
 mkdir -p "$WORKDIR"
+
+# Start the web server in the background
+echo "--- Starting Web Server on port 8080 ---"
+python3 /app/server.py > /app/webserver.log 2>&1 &
+SERVER_PID=$!
 
 # Construct arguments for md_workflow.py
 # --no-docker is used because we ARE already inside docker

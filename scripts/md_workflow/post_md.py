@@ -83,52 +83,37 @@ def analyze_complex(complex_name, outdir, workdir, cfg, args):
     logger.info(f"--- Analyzing Complex: {complex_name} ---")
     
     tpr = os.path.join(outdir, f"{complex_name}_md.tpr")
-    xtc = os.path.join(outdir, f"{complex_name}_md.xtc")
+    # Prefer combined xtc if it exists
+    combined_xtc = os.path.join(outdir, f"{complex_name}_md_combined.xtc")
+    standard_xtc = os.path.join(outdir, f"{complex_name}_md.xtc")
+    
+    xtc = combined_xtc if os.path.exists(combined_xtc) else standard_xtc
     
     if not os.path.exists(tpr) or not os.path.exists(xtc):
         logger.warning(f"Skipping {complex_name}: Production MD files (tpr/xtc) missing in {outdir}.")
         return None
+    
+    if xtc == combined_xtc:
+        logger.info(f"Using concatenated trajectory: {os.path.basename(xtc)}")
+    else:
+        logger.info(f"Using standard trajectory: {os.path.basename(xtc)}")
 
     analysis_dir = os.path.join(outdir, f"analysis_{complex_name}")
     os.makedirs(analysis_dir, exist_ok=True)
     
     plots_collected = {}
 
-    # Helper to run and collect
-    def run_analysis(tool, input_flags, output_file, stdin, plot_title, extra_args=None):
-        out_path = os.path.join(analysis_dir, output_file)
-        plot_path = out_path.replace(".xvg", ".png")
-        if not os.path.exists(out_path):
-            logger.info(f"Calculating {plot_title} for {complex_name}...")
-            # Prepare output flag based on tool
-            output_flags = {"-o": out_path}
-            if tool == "hbond":
-                output_flags = {"-num": out_path}
-
-            gmx_args = [tool]
-            if extra_args:
-                gmx_args.extend(extra_args)
-
-            run_gmx(
-                gmx_args,
-                input_files=input_flags,
-                output_files=output_flags,
-                stdin=stdin,
-                use_docker=args.docker,
-                image=args.image,
-                host_root=args.host_root,
-                cwd=workdir,
-                cpus=args.cpus,
-            )
-            plot_xvg(out_path, plot_path)
-        
-        stats = get_xvg_stats(out_path)
-        plots_collected[plot_title] = {"path": plot_path, "stats": stats}
-
     # 1. PBC Treatment: NoPBC and Fitted Trajectories
     # We center on Protein and output System
     nopbc_xtc = os.path.join(analysis_dir, f"{complex_name}_noPBC.xtc")
-    if not os.path.exists(nopbc_xtc):
+    # Force re-run if source xtc is newer than existing nopbc_xtc
+    force_pbc = False
+    if os.path.exists(nopbc_xtc):
+        if os.path.getmtime(xtc) > os.path.getmtime(nopbc_xtc):
+            logger.info(f"Source trajectory {os.path.basename(xtc)} is newer than {os.path.basename(nopbc_xtc)}. Forcing PBC fix.")
+            force_pbc = True
+
+    if not os.path.exists(nopbc_xtc) or force_pbc:
         logger.info(f"Fixing PBC for {complex_name}...")
         run_gmx(
             ["trjconv", "-pbc", "mol", "-center"],
@@ -143,7 +128,12 @@ def analyze_complex(complex_name, outdir, workdir, cfg, args):
         )
 
     fitted_xtc = os.path.join(analysis_dir, f"{complex_name}_fitted.xtc")
-    if not os.path.exists(fitted_xtc):
+    force_fit = force_pbc
+    if os.path.exists(fitted_xtc) and not force_fit:
+        if os.path.getmtime(nopbc_xtc) > os.path.getmtime(fitted_xtc):
+            force_fit = True
+
+    if not os.path.exists(fitted_xtc) or force_fit:
         logger.info(f"Fitting trajectory for {complex_name}...")
         run_gmx(
             ["trjconv", "-fit", "rot+trans"],
@@ -161,6 +151,49 @@ def analyze_complex(complex_name, outdir, workdir, cfg, args):
     lig_group = get_ligand_group(tpr, complex_name, workdir, args)
     logger.info(f"Identified Ligand Group: {lig_group}")
 
+    # Helper to run and collect
+    def run_analysis(tool, input_flags, output_file, stdin, plot_title, extra_args=None):
+        out_path = os.path.join(analysis_dir, output_file)
+        plot_path = out_path.replace(".xvg", ".png")
+        
+        # Force re-run if fitted_xtc is newer than out_path
+        force_run = force_fit
+        if os.path.exists(out_path) and not force_run:
+            if os.path.getmtime(fitted_xtc) > os.path.getmtime(out_path):
+                force_run = True
+
+        if not os.path.exists(out_path) or force_run:
+            logger.info(f"Calculating {plot_title} for {complex_name}...")
+            # Prepare output flag based on tool
+            output_flags = {"-o": out_path}
+            if tool in ["hbond", "hbond-legacy"]:
+                output_flags = {"-num": out_path}
+
+            gmx_args = [tool]
+            if extra_args:
+                gmx_args.extend(extra_args)
+
+            success = run_gmx(
+                gmx_args,
+                input_files=input_flags,
+                output_files=output_flags,
+                stdin=stdin,
+                use_docker=args.docker,
+                image=args.image,
+                host_root=args.host_root,
+                cwd=workdir,
+                cpus=args.cpus,
+            )
+            if success and os.path.exists(out_path):
+                plot_xvg(out_path, plot_path)
+            else:
+                logger.warning(f"Failed to calculate {plot_title} for {complex_name}")
+                return
+
+        if os.path.exists(out_path):
+            stats = get_xvg_stats(out_path)
+            plots_collected[plot_title] = {"path": plot_path, "stats": stats}
+
     # 2. RMSD Analysis
     run_analysis("rms", {"-f": fitted_xtc, "-s": tpr, "-tu": "ns"}, "rmsd_protein.xvg", "Backbone\nBackbone\n", "Protein RMSD")
     run_analysis("rms", {"-f": fitted_xtc, "-s": tpr, "-tu": "ns"}, "rmsd_ligand.xvg", "Backbone\n" + f"{lig_group}\n", "Ligand RMSD")
@@ -172,7 +205,9 @@ def analyze_complex(complex_name, outdir, workdir, cfg, args):
     run_analysis("gyrate", {"-f": fitted_xtc, "-s": tpr}, "rg_protein.xvg", "Backbone\n", "Radius of Gyration")
 
     # 5. Hydrogen Bonds
-    run_analysis("hbond", {"-f": fitted_xtc, "-s": tpr}, "hbonds.xvg", "Protein\n" + f"{lig_group}\n", "Hydrogen Bonds")
+    # Using hbond-legacy because the new hbond (GROMACS 2024+) often fails to recognize
+    # donors/acceptors in acpype-generated ligand topologies.
+    run_analysis("hbond-legacy", {"-f": fitted_xtc, "-s": tpr}, "hbonds.xvg", "Protein\n" + f"{lig_group}\n", "Hydrogen Bonds")
 
     # Generate HTML Report
     metadata = {
@@ -314,10 +349,12 @@ def main():
                 ligand_ids.append(os.path.splitext(os.path.basename(l))[0])
         if "ligands" in cfg:
             for l in cfg["ligands"]:
-                if "file" in l:
-                    ligand_ids.append(os.path.splitext(os.path.basename(l["file"]))[0])
-                else:
-                    ligand_ids.append(l.get("id", "unknown"))
+                l_id = l.get("id") or (
+                    os.path.splitext(os.path.basename(l["file"]))[0]
+                    if "file" in l
+                    else "unknown"
+                )
+                ligand_ids.append(l_id)
 
         protein_ids = list(set(protein_ids))
         ligand_ids = list(set(ligand_ids))

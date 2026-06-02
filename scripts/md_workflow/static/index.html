@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MD Workflow Monitor</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>MD Workflow Monitor</h1>
+            <div id="server-status" class="status-badge">Connecting...</div>
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="system-info" class="card">
+            <h2>System Information</h2>
+            <div class="grid">
+                <div class="info-item"><strong>Hostname:</strong> <span id="info-hostname">-</span></div>
+                <div class="info-item"><strong>GPU:</strong> <span id="info-gpu">-</span></div>
+                <div class="info-item"><strong>Outdir:</strong> <span id="info-outdir">-</span></div>
+                <div class="info-item"><strong>Workdir:</strong> <span id="info-workdir">-</span></div>
+            </div>
+        </section>
+
+        <section id="gpu-monitor" class="card">
+            <h2>GPU Status (nvidia-smi)</h2>
+            <pre id="gpu-output">Loading GPU data...</pre>
+        </section>
+
+        <section id="progress-monitor" class="card">
+            <h2>Active Simulations</h2>
+            <div id="simulation-list">
+                <p class="placeholder">No active simulations detected.</p>
+            </div>
+        </section>
+
+        <section id="log-viewer" class="card">
+            <div class="card-header">
+                <h2>Log Viewer</h2>
+                <select id="log-selector">
+                    <option value="">Select a log file...</option>
+                </select>
+            </div>
+            <pre id="log-output">Select a log file to view its contents.</pre>
+        </section>
+
+        <section id="file-explorer" class="card">
+            <h2>Results Explorer</h2>
+            <ul id="file-list">
+                <p class="placeholder">Scanning results directory...</p>
+            </ul>
+        </section>
+
+        <section id="notifications" class="card">
+            <h2>Notifications</h2>
+            <div class="input-group">
+                <input type="text" id="notify-message" placeholder="Enter test message...">
+                <button id="btn-notify">Send Test Notification</button>
+            </div>
+            <p id="notify-status"></p>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 MD Workflow Dashboard | Lightweight Monitoring</p>
+        </div>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
