@@ -1,5 +1,6 @@
 # Base patterns from .gitignore
 work/
+work*
 results/
 results*
 .nextflow/
@@ -17,23 +18,23 @@ scripts/md_workflow/work/
 
 # Ignore everything in the workflow data directory
 scripts/md_workflow/data/*
-
-# Allow only these specific files
-!scripts/md_workflow/data/6NJS-1.json
-!scripts/md_workflow/data/6NJS-2.json
-!scripts/md_workflow/data/6NJS.pdb
-!scripts/md_workflow/data/smoke_test.json
-!scripts/md_workflow/data/ligand_6NJS_ref.pdb
-!scripts/md_workflow/data/5TBM-1.json
-!scripts/md_workflow/data/5TBM-2.json
-!scripts/md_workflow/data/5TBM.pdb
-
-# Allow the leads directory but ignore its contents by default
-!scripts/md_workflow/data/leads/
-scripts/md_workflow/data/leads/*
-
-# Allow only the two specific ligands required for 6NJS
-!scripts/md_workflow/data/leads/6NJS_COMBINED-SCREENED-MOLECULES-35019-LOW_27420.pdbqt
-!scripts/md_workflow/data/leads/6NJS_COMBINED-SCREENED-MOLECULES-35019-LOW_27587.pdbqt
-!scripts/md_workflow/data/leads/5TBM_COMBINED-SCREENED-MOLECULES-35019-LOW_27420.pdbqt
-!scripts/md_workflow/data/leads/5TBM_COMBINED-SCREENED-MOLECULES-35019-LOW_27587.pdbqt
+#
+# # Allow only these specific files
+# !scripts/md_workflow/data/6NJS-1.json
+# !scripts/md_workflow/data/6NJS-2.json
+# !scripts/md_workflow/data/6NJS.pdb
+# !scripts/md_workflow/data/smoke_test.json
+# !scripts/md_workflow/data/ligand_6NJS_ref.pdb
+# !scripts/md_workflow/data/5TBM-1.json
+# !scripts/md_workflow/data/5TBM-2.json
+# !scripts/md_workflow/data/5TBM.pdb
+#
+# # Allow the leads directory but ignore its contents by default
+# !scripts/md_workflow/data/leads/
+# scripts/md_workflow/data/leads/*
+#
+# # Allow only the two specific ligands required for 6NJS
+# !scripts/md_workflow/data/leads/6NJS_COMBINED-SCREENED-MOLECULES-35019-LOW_27420.pdbqt
+# !scripts/md_workflow/data/leads/6NJS_COMBINED-SCREENED-MOLECULES-35019-LOW_27587.pdbqt
+# !scripts/md_workflow/data/leads/5TBM_COMBINED-SCREENED-MOLECULES-35019-LOW_27420.pdbqt
+# !scripts/md_workflow/data/leads/5TBM_COMBINED-SCREENED-MOLECULES-35019-LOW_27587.pdbqt

@@ -3,6 +3,7 @@
 
 # nextflow workdir
 work/
+work*
 
 # output files
 results/
