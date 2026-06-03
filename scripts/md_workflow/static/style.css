@@ -74,7 +74,8 @@ main {
     #progress-monitor { grid-column: span 1; }
     #log-viewer { grid-column: span 2; }
     #file-explorer { grid-column: span 1; }
-    #notifications { grid-column: span 1; }
+    #work-explorer { grid-column: span 1; }
+    #notifications { grid-column: span 2; }
 }
 
 .card {

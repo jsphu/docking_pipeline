@@ -50,7 +50,7 @@ mkdir -p "$WORKDIR"
 
 # Start the web server in the background
 echo "--- Starting Web Server on port 8080 ---"
-python3 /app/server.py > /app/webserver.log 2>&1 &
+python3 /app/server.py >/app/webserver.log 2>&1 &
 SERVER_PID=$!
 
 # Construct arguments for md_workflow.py
@@ -75,6 +75,11 @@ fi
 if [ "$RESUME" = "1" ] || [ "$RESUME" = "true" ]; then
   CMD_ARGS="$CMD_ARGS --resume --skip-prep"
   echo "Resume mode enabled."
+fi
+
+if [ -n "$NSTEPS" ]; then
+  echo "Production MD steps: $NSTEPS"
+  CMD_ARGS="$CMD_ARGS --nsteps $NSTEPS"
 fi
 
 if [ -n "$EXTRA_ARGS" ]; then

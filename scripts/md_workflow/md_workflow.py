@@ -75,6 +75,7 @@ def main():
     parser.add_argument(
         "--notify-interval", type=int, default=1800, help="Notify interval"
     )
+    parser.add_argument("--nsteps", type=int, help="Production MD step count")
     parser.add_argument("--log", help="Log file")
 
     args = parser.parse_args()
@@ -95,7 +96,84 @@ def main():
     if os.path.exists(config_path):
         cfg = load_config(config_path)
 
-    cfg.setdefault("md", {"nsteps": 500000, "dt": 0.002, "tau_t": 0.1, "tau_p": 2.0})
+    # Set top-level defaults
+    cfg.setdefault("temperature", 300)
+    cfg.setdefault("pressure", 1.0)
+    cfg.setdefault("force_field", "amber99sb-ildn")
+    cfg.setdefault("water_model", "tip3p")
+    cfg.setdefault("cutoff_scheme", "Verlet")
+    cfg.setdefault("coulombtype", "PME")
+    cfg.setdefault("rcoulomb", 1.0)
+    cfg.setdefault("rvdw", 1.0)
+    cfg.setdefault("constraint_algorithm", "lincs")
+    cfg.setdefault("constraints", "h-bonds")
+    cfg.setdefault("lincs_iter", 1)
+    cfg.setdefault("lincs_order", 4)
+    cfg.setdefault("nstlist", 10)
+    cfg.setdefault("pme_order", 4)
+    cfg.setdefault("fourierspacing", 0.16)
+    cfg.setdefault("tcoupl", "V-rescale")
+    cfg.setdefault("pcoupl", "Parrinello-Rahman")
+    cfg.setdefault("pcoupltype", "isotropic")
+    cfg.setdefault("compressibility", 4.5e-5)
+    cfg.setdefault("disp_corr", "EnerPres")
+
+    # Ensure "em" section exists with defaults
+    if "em" not in cfg:
+        cfg["em"] = {"nsteps": 50000, "emtol": 1000.0, "emstep": 0.01}
+    else:
+        cfg["em"].setdefault("nsteps", 50000)
+        cfg["em"].setdefault("emtol", 1000.0)
+        cfg["em"].setdefault("emstep", 0.01)
+
+    # Ensure "nvt" section exists with defaults
+    if "nvt" not in cfg:
+        cfg["nvt"] = {"nsteps": 50000, "dt": 0.002, "tau_t": 0.1}
+    else:
+        cfg["nvt"].setdefault("nsteps", 50000)
+        cfg["nvt"].setdefault("dt", 0.002)
+        cfg["nvt"].setdefault("tau_t", 0.1)
+
+    # Ensure "npt" section exists with defaults
+    if "npt" not in cfg:
+        cfg["npt"] = {"nsteps": 50000, "dt": 0.002, "tau_t": 0.1, "tau_p": 2.0}
+    else:
+        cfg["npt"].setdefault("nsteps", 50000)
+        cfg["npt"].setdefault("dt", 0.002)
+        cfg["npt"].setdefault("tau_t", 0.1)
+        cfg["npt"].setdefault("tau_p", 2.0)
+
+    # Ensure "md" section exists with defaults
+    if "md" not in cfg:
+        cfg["md"] = {
+            "nsteps": 500000,
+            "dt": 0.002,
+            "tau_t": 0.1,
+            "tau_p": 2.0,
+            "nstxout": 0,
+            "nstvout": 0,
+            "nstfout": 0,
+            "nstxtcout": 5000,
+            "nstenergy": 5000,
+            "nstlog": 5000,
+        }
+    else:
+        # If section exists, ensure all required keys are there
+        cfg["md"].setdefault("nsteps", 500000)
+        cfg["md"].setdefault("dt", 0.002)
+        cfg["md"].setdefault("tau_t", 0.1)
+        cfg["md"].setdefault("tau_p", 2.0)
+        cfg["md"].setdefault("nstxout", 0)
+        cfg["md"].setdefault("nstvout", 0)
+        cfg["md"].setdefault("nstfout", 0)
+        cfg["md"].setdefault("nstxtcout", 5000)
+        cfg["md"].setdefault("nstenergy", 5000)
+        cfg["md"].setdefault("nstlog", 5000)
+
+    # Override from CLI
+    if args.nsteps:
+        cfg["md"]["nsteps"] = args.nsteps
+
     notifier = Notifier(cfg.get("notifications", {}))
     if not notifier.is_configured():
         notifier = None

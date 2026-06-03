@@ -22,6 +22,7 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 # Mount static files
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+
 @app.get("/")
 async def root():
     index_path = os.path.join(STATIC_DIR, "index.html")
@@ -34,9 +35,9 @@ async def root():
             "workdir": WORKDIR,
             "config": CONFIG_FILE,
             "gpu": os.environ.get("USE_GPU", "unknown"),
-            "hostname": os.environ.get("HOSTNAME", "unknown")
+            "hostname": os.environ.get("HOSTNAME", "unknown"),
         },
-        "message": "Frontend not found. Please ensure static/index.html exists."
+        "message": "Frontend not found. Please ensure static/index.html exists.",
     }
 
 
@@ -52,8 +53,11 @@ async def gpu_status():
 @app.get("/download/{filename:path}")
 async def download_file(filename: str):
     file_path = os.path.join(OUTDIR, filename)
+    work_path = os.path.join(WORKDIR, filename)
     if os.path.exists(file_path) and os.path.isfile(file_path):
         return FileResponse(file_path, filename=os.path.basename(file_path))
+    if os.path.exists(work_path) and os.path.isfile(work_path):
+        return FileResponse(work_path, filename=os.path.basename(work_path))
     raise HTTPException(status_code=404, detail="File not found")
 
 
@@ -78,7 +82,9 @@ async def cpt_status():
         r"Writing checkpoint, step (\d+) at ([A-Za-z]{3}\s+[A-Za-z]{3}\s+\d+\s+\d{2}:\d{2}:\d{2}\s+\d{4})"
     )
     try:
-        log_files = glob.glob(os.path.join(OUTDIR, "*_md.log"))
+        log_files = glob.glob(os.path.join(OUTDIR, "*_md.log")) + glob.glob(
+            os.path.join(WORKDIR, "*_md.log")
+        )
         progress = {}
 
         for log in log_files:
@@ -136,22 +142,49 @@ async def get_logs():
     return logs
 
 
+@app.get("/work")
+async def list_work():
+    try:
+        total_size = 0
+        files = []
+        for root, dirs, filenames in os.walk(WORKDIR):
+            for filename in filenames:
+                full_path = os.path.join(root, filename)
+                display_path = os.path.relpath(full_path, WORKDIR)
+                stats = file_stats(full_path)
+                total_size += stats["size"]
+                files.append(
+                    {
+                        "filepath": display_path,
+                        "stats": stats,
+                    }
+                )
+
+        return {"files": files, "total_size": total_size}
+
+    except Exception as e:
+        return {"error": f"Failed to read work directory: {str(e)}"}
+
+
 @app.get("/results")
 async def list_results():
     try:
+        total_size = 0
         files = []
         for root, dirs, filenames in os.walk(OUTDIR):
             for filename in filenames:
                 full_path = os.path.join(root, filename)
                 display_path = os.path.relpath(full_path, OUTDIR)
+                stats = file_stats(full_path)
+                total_size += stats["size"]
                 files.append(
                     {
                         "filepath": display_path,
-                        "stats": file_stats(full_path),
+                        "stats": stats,
                     }
                 )
 
-        return {"files": files}
+        return {"files": files, "total_size": total_size}
 
     except Exception as e:
         return {"error": f"Failed to read results directory: {str(e)}"}
@@ -161,7 +194,9 @@ async def list_results():
 async def get_progress():
     import re
 
-    log_files = glob.glob(os.path.join(OUTDIR, "*_md.log"))
+    log_files = glob.glob(os.path.join(OUTDIR, "*_md.log")) + glob.glob(
+        os.path.join(WORKDIR, "*_md.log")
+    )
     progress = {}
     for log in log_files:
         complex_id = os.path.basename(log).replace("_md.log", "")
@@ -196,8 +231,8 @@ async def get_config():
         with open(CONFIG_FILE, "r") as f:
             try:
                 return json.load(f)
-            except:
-                return {"error": "Failed to parse config as JSON"}
+            except Exception as e:
+                return {"error": f"Failed to parse config as JSON. {str(e)}"}
     return {"error": "Config file not found"}
 
 
@@ -224,6 +259,6 @@ async def trigger_notify(message: str):
 
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.environ.get("WEB_PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
-

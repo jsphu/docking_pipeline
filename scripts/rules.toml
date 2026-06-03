@@ -1,14 +1,14 @@
 #Molecular Weight Daltons
-mw = ["x >= 200", "x <= 450"]
+mw = ["x <= 450"]
 # Lipophilicity (log P)
 logp = ["x <= 4.0", "x >= 2.0"]
 #Hydrogen Bond Donors (Total number of OH and NH groups)
-hbd = "x < 3"
+hbd = "x < 5"
 #Hydrogen Bond Acceptors (Total number of N and O atoms)
 hba = "x <= 10"
 #Vina Score / Non-Hydrogen Atom Count
 vs = "x >= 0.3"
 #Polar Surface Area Aº²
-psa = ["x < 90"]
+psa = ["x < 70"]
 #Neutral Charge
 charge = "x == 0"

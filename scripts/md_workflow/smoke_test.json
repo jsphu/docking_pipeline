@@ -1,0 +1,61 @@
+{
+  "force_field": "amber99sb-ildn",
+  "water_model": "tip3p",
+  "temperature": 300,
+  "pressure": 1.0,
+  "box_buffer": 0.8,
+  "box_type": "cubic",
+  "cutoff_scheme": "Verlet",
+  "nstlist": 20,
+  "ns_type": "grid",
+  "rcoulomb": 0.7,
+  "rvdw": 0.7,
+  "coulombtype": "PME",
+  "pme_order": 4,
+  "fourierspacing": 0.16,
+  "tcoupl": "V-rescale",
+  "pcoupl": "Berendsen",
+  "pcoupltype": "isotropic",
+  "compressibility": 4.5e-5,
+  "constraints": "h-bonds",
+  "constraint_algorithm": "lincs",
+  "lincs_iter": 1,
+  "lincs_order": 4,
+  "disp_corr": "EnerPres",
+  "proteins": [{ "file": "6NJS.pdb", "id": "6NJS" }],
+  "ligands": [
+    {
+      "file": "ligand_6NJS_ref.pdb",
+      "id": "REF",
+      "SMILES": "Fc1ccc(cc1)c1ccc(=O)n(n1)CC(=O)NC1=CC2=CC=CCC2=C1"
+    }
+  ],
+  "em": {
+    "nsteps": 50,
+    "emtol": 1000.0,
+    "emstep": 0.01
+  },
+  "nvt": {
+    "nsteps": 50,
+    "dt": 0.002,
+    "tau_t": 0.1
+  },
+  "npt": {
+    "nsteps": 50,
+    "dt": 0.002,
+    "tau_t": 0.1,
+    "tau_p": 1.0
+  },
+  "md": {
+    "nsteps": 100,
+    "dt": 0.002,
+    "tau_t": 0.1,
+    "tau_p": 2.0,
+    "nstxout": 0,
+    "nstvout": 0,
+    "nstfout": 0,
+    "nstxtcout": 50,
+    "nstenergy": 50,
+    "nstlog": 50
+  }
+}
