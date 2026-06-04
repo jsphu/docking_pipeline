@@ -257,8 +257,9 @@ def run_step(
     is_opencl = False
     try:
         # Check GROMACS version once
+        gmx_bin = os.environ.get("GMX_BIN", "gmx")
         result = subprocess.run(
-            ["gmx", "mdrun", "-version"], capture_output=True, text=True
+            [gmx_bin, "mdrun", "-version"], capture_output=True, text=True
         )
         if "OpenCL" in result.stdout:
             is_opencl = True
@@ -273,14 +274,16 @@ def run_step(
         md_args.extend(["-nb", "gpu", "-pme", "gpu"])
 
         if not is_opencl:
-            # For modern CUDA (RTX 30/40/50), bonded GPU is usually stable.
-            # We keep update on CPU for widest compatibility unless specified.
-            md_args.extend(["-bonded", "gpu", "-update", "cpu"])
+            # For RunPod/High-end NVIDIA GPUs, we offload EVERYTHING to GPU.
+            # This requires -ntmpi 1 (which we set above).
+            md_args.extend(["-bonded", "gpu", "-update", "gpu"])
         else:
+            # OpenCL doesn't support -update gpu yet in many GMX versions
             md_args.extend(["-bonded", "cpu", "-update", "cpu"])
     elif gpu and step_name == "em":
-        # Energy minimization often fails on GPU due to extreme forces; CPU is safer.
-        md_args.extend(["-nb", "cpu"])
+        # EM on GPU is only supported for non-bonded in some GMX versions, 
+        # and often slower/unstable. We use GPU for NB if requested.
+        md_args.extend(["-nb", "gpu"])
 
     # Start Progress Monitor if it's production MD and interval is set
     monitor = None
@@ -298,19 +301,8 @@ def run_step(
             cwd=target_dir,
             cpus=cpus,
         ):
-            if not use_docker:
-                logger.warning("Warning: GPU failed locally, falling back to CPU...")
-                # Simple CPU fallback for local runs
-                if not run_gmx(
-                    ["mdrun", "-deffnm", md_out_abs],
-                    input_files={"-s": tpr},
-                    cwd=target_dir,
-                    cpus=cpus,
-                ):
-                    raise RuntimeError(f"mdrun ({step_name}) failed on CPU")
-            else:
-                # In Docker/Salad environment, we don't want a silent CPU fallback if GPU fails
-                raise RuntimeError(f"mdrun ({step_name}) failed in GPU mode")
+            # NO CPU FALLBACK as requested. Fail explicitly if GPU fails.
+            raise RuntimeError(f"mdrun ({step_name}) failed in GPU mode. Check logs for CUDA errors.")
     finally:
         if monitor:
             monitor.stop()

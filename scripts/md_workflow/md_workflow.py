@@ -47,7 +47,8 @@ def get_files(path, extensions):
 
 def main():
     cpu_count = os.cpu_count() or 1
-    default_cpus = min(cpu_count, 16)
+    # Leave 1-2 cores free for the system/webserver to prevent unresponsiveness
+    default_cpus = max(1, min(cpu_count - 1, 16)) if cpu_count > 1 else 1
 
     parser = argparse.ArgumentParser(description="Automated MD Workflow")
     parser.add_argument(
@@ -295,8 +296,12 @@ def main():
                 entry["file"] = os.path.abspath(
                     os.path.join(os.path.dirname(config_path), l["file"])
                 )
-            if "smiles" in l:
-                entry["smiles"] = l["smiles"]
+            
+            # Handle case-insensitive SMILES key
+            smiles_val = l.get("smiles") or l.get("SMILES")
+            if smiles_val:
+                entry["smiles"] = smiles_val
+                
             if not any(lp.get("id") == entry["id"] for lp in ligands_to_prep):
                 ligands_to_prep.append(entry)
 

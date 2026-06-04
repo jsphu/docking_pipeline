@@ -186,8 +186,9 @@ def prepare_ligand_from_pose(ligand_file, output_dir, run_command_func, smiles=N
                 if not line.startswith("CONECT"):
                     f_out.write(line)
         
-        # Load heavy coordinates WITHOUT proximity bonding or sanitization (let the template handle it)
-        pose_mol = Chem.MolFromPDBFile(clean_pdb, proximityBonding=False, sanitize=False)
+        # Load heavy coordinates WITH proximity bonding so RDKit can perceive bonds 
+        # for the template matching to work. Sanitization is off to prevent failure on unperceived valency.
+        pose_mol = Chem.MolFromPDBFile(clean_pdb, proximityBonding=True, sanitize=False)
         if not pose_mol:
             raise RuntimeError("RDKit failed to read heavy PDB (clean)")
 

@@ -81,14 +81,16 @@ RUN chmod +x /app/md_workflow.py /app/post_md.py /app/entrypoint.sh /app/run_smo
 
 # Default Environment Variables for Runtime
 ENV DATADIR=/app/data
-ENV CONFIG_FILE=/app/data/6NJS.json
-ENV OUTDIR=/results
-ENV WORKDIR=/work
+ENV CONFIG_FILE=/app/data/6NJS-1.json
+ENV OUTDIR=/workspace/results
+ENV WORKDIR=/workspace/work
+ENV PREFLIGHT_CHECK=false
+ENV AUTO_CPUS=true
 ENV USE_GPU=true
 ENV RESUME=0
 
 # Create necessary directories
-RUN mkdir -p /results /work /app/data
+RUN mkdir -p /workspace/results /workspace/work /app/data && cp /app/data/6NJS-1.json /workspace/results
 
 # Expose the web server port
 EXPOSE 8080

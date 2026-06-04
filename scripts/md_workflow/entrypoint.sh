@@ -13,10 +13,10 @@ export MAMBA_ROOT_PREFIX=/root/micromamba
 export PATH="/root/micromamba/envs/md_env/bin:/usr/local/bin:$PATH"
 export CONDA_PREFIX="/root/micromamba/envs/md_env"
 
-# GPU related GROMACS tuning
-export GMX_ENABLE_DIRECT_GPU_COMM=1
-export GMX_GPU_PME_PP_COMMS=1
-export GMX_GPU_DD_COMMS=1
+# GPU related GROMACS tuning (Disabled for stability, enable ONLY if system supports P2P/NVLink)
+export GMX_ENABLE_DIRECT_GPU_COMM=0
+export GMX_GPU_PME_PP_COMMS=0
+export GMX_GPU_DD_COMMS=0
 
 if [ "$PREFLIGHT_CHECK" = "false" ]; then
   echo "Skipping GPU test (PREFLIGHT_CHECK=false)"
@@ -101,7 +101,7 @@ echo "--- Starting Main MD Workflow ---"
 python3 /app/md_workflow.py $CMD_ARGS
 
 echo "--- Starting Post-MD Analysis ---"
-POST_ARGS="--outdir $OUTDIR --no-docker"
+POST_ARGS="--outdir $OUTDIR --workdir $WORKDIR --config $CONFIG_FILE --no-docker"
 if [ "$UPLOAD_RESULTS" = "true" ]; then
   POST_ARGS="$POST_ARGS --upload"
 fi
