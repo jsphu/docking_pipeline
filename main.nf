@@ -31,6 +31,7 @@ def helpMessage() {
       --energy_range       [float] Maximum energy difference between the best and worst modes (kcal/mol). Default: ${params.energy_range}
 
     Filtering & Analysis:
+      --prefilter          [bool]  Run pre-docking filtering (Rules + PAINS). Default: ${params.prefilter}
       --run_filtering      [bool]  Run post-docking analysis (PAINS, Properties, BOILED-Egg). Default: ${params.run_filtering}
       --rules_file         [path]  TOML file containing filtering rules. Default: ${params.rules_file}
 
@@ -56,20 +57,38 @@ include { DOWNLOAD_PDBQT_AND_UNZIP }    from './src/downloader/downloadPdbqtAndU
 include { PREPARE_PROTEIN }             from './src/preparation/protein.nf'
 include { PREPARE_LIGANDS }             from './src/preparation/ligand.nf'
 include { SPLIT_INPUT }                 from './src/preparation/split.nf'
-include { COLLECT_RESULTS; EXTRACT_SMILES; FILTER_LIGANDS; PAINS_FILTER; BOILED_EGG } from './src/filtering/filtering.nf'
+include { COLLECT_RESULTS; EXTRACT_SMILES; FILTER_LIGANDS; PAINS_FILTER; BOILED_EGG; PREFILTER_SMILES } from './src/filtering/filtering.nf'
 
 workflow {
     def docking_config = [ center_x: params.center_x, center_y: params.center_y, center_z: params.center_z, size_x: params.size_x, size_y: params.size_y, size_z: params.size_z, exhaustiveness: params.exhaustiveness, num_modes: params.num_modes, energy_range: params.energy_range, thread_size: params.thread_size ]
 
-    prepared_receptor_ch = PREPARE_PROTEIN(channel.fromPath(params.receptor))
-    receptor_file_ch = prepared_receptor_ch.collect()
+    receptor_file_ch = PREPARE_PROTEIN(channel.fromPath(params.receptor))
 
-    links_ch = get_links_channel()
+    links_ch = channel.fromPath(params.links_file)
 
-    main_ch = params.skip_download ? get_local_channel() 
+    main_ch = params.ligands 
+        ? channel.fromPath(params.ligands)
         : params.use3d_downloader
             ? DOWNLOAD_PDBQT_AND_UNZIP(links_ch).flatten() 
             : DOWNLOAD_SMILES(links_ch).flatten() 
+
+    // Validation for filtering
+    if (params.prefilter || params.run_filtering) {
+        if (!params.rules_file || !file(params.rules_file).exists()) {
+            error "Parameter --rules_file is required and must exist when --prefilter or --run_filtering is enabled. Current value: ${params.rules_file}"
+        }
+    }
+
+    // Optional pre-filtering for SMILES
+    if (params.prefilter) {
+        main_ch = main_ch.branch {
+            smi: it.extension == 'smi' || it.extension == 'smiles' || it.extension == 'txt'
+            other: true
+        }
+
+        prefiltered_smi_ch = PREFILTER_SMILES(main_ch.smi.collect(), file(params.rules_file))
+        main_ch = prefiltered_smi_ch.smi.mix(main_ch.other)
+    }
 
     // We branch based on whether the data is 3D (PDBQT) or 2D (SMILES) or only one pdbqt
     if (params.one_pdbqt) {
@@ -113,9 +132,10 @@ workflow {
           )
       }
 
+    // Always collect scores regardless of filtering
+    scores_csv_ch = COLLECT_RESULTS(docking_output_ch.collect())
+
     if (params.run_filtering) {
-        scores_csv_ch = COLLECT_RESULTS(docking_output_ch.collect())
-        
         // Extract SMILES from the prepared ligands for property calculation
         smiles_csv_ch = EXTRACT_SMILES(ligands_ch.map{it[1]}.collect())
 
@@ -154,6 +174,7 @@ params.smiles_file      = ''
 params.pdbqt_file       = ''
 params.sdf_file         = ''
 params.one_pdbqt        = false
+params.prefilter        = false
 params.run_filtering    = false
 params.rules_file       = 'scripts/rules.toml'
 params.use_gpu          = false

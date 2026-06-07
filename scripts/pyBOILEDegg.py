@@ -1,69 +1,13 @@
-#!/usr/bin/env python
-
-"""
-pyBOILEDegg.py : a python program for prediction of gastrointestinal
-absorption and brain penetration of molecules.
-
-Copyright (C) 2021  Bruce F. Milne
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-"""
-
-__author__ = "Bruce F. Milne"
-__copyright__ = "Copyright (C) 2021 Bruce F. Milne"
-__license__ = "GPL"
-
-
-"""
-Program usage.
-
-Requires as input 3D molecular structure(s) in a single SDF format file:
-
-prompt$ python pyBOILEDegg.py
-
-You will then be prompted for a prefix to use in the output files and for the name
-(and path to) your SDF file.
-"""
-
-import os
-import argparse
 import pandas as pd
-import matplotlib.pyplot as plt
 from rdkit import Chem
-from rdkit.Chem import Descriptors, PandasTools
-from shapely.geometry import Point, Polygon
-
-
-def calc_tpsa(m):
-    """
-    Calculate topological polar surface area.
-    S and P contributions included as these were
-    used in the original BOILED-egg model.
-    """
-    tpsa = Descriptors.TPSA(m, includeSandP=True)
-    return tpsa
-
-
-def calc_wlogp(m):
-    """
-    Calculate WLogP.
-    NOTE: RDKit calls this MolLogP but it is the same
-    descriptor.
-    """
-    wlogp = Descriptors.MolLogP(m)
-    return wlogp
+from rdkit.Chem import Descriptors
+from shapely.geometry import Point
+from shapely.geometry.polygon import Polygon
+import matplotlib.pyplot as plt
+import argparse
+import os
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 
 
 # Data for GIA and BBB models from supporting information of
@@ -275,164 +219,221 @@ bbb_coords = [
     [40.970179251316814, 0.4062562899766127],
 ]
 
-gia = pd.DataFrame(gia_coords, columns=["tpsa", "wlogp"])
-bbb = pd.DataFrame(bbb_coords, columns=["tpsa", "wlogp"])
 
-# Define ellipses for identification of good GIA/BBB profiles
-gia_ellipse = Polygon(gia_coords)
-bbb_ellipse = Polygon(bbb_coords)
+def calc_tpsa(mol):
+    return Descriptors.TPSA(mol)
 
-# List to handle results
-results = []
+
+def calc_wlogp(mol):
+    return Descriptors.MolLogP(mol)
 
 
 def clean_numeric(val):
     if isinstance(val, str):
-        val = val.replace(",", ".")
-        val = val.replace("−", "-")  # Handle special minus sign
+        val = val.replace(",", ".").replace("−", "-")
     try:
         return float(val)
     except:
         return None
 
 
-argumentparser = argparse.ArgumentParser()
+def process_single_row(row_tuple, gia_ellipse, bbb_ellipse, available_cols):
+    """Worker function to process one row for BOILED Egg."""
+    idx, row = row_tuple
+    name = str(row.get("Name", "Unknown")).strip().replace(" ", "_").replace("-", "_")
 
-argumentparser.add_argument("--prefix")
-argumentparser.add_argument(
-    "--input-type",
-    help="Input file type (sdf, csv) swissADME's csv or structure data file",
-)
-argumentparser.add_argument("--infile")
+    tpsa = None
+    wlogp = None
 
-args = argumentparser.parse_args()
+    if "TPSA" in available_cols and "WLogP" in available_cols:
+        tpsa = clean_numeric(row.get(available_cols["TPSA"]))
+        wlogp = clean_numeric(row.get(available_cols["WLogP"]))
+    elif "SMILES" in row:
+        mol = Chem.MolFromSmiles(row["SMILES"])
+        if mol:
+            tpsa = round(calc_tpsa(mol), 2)
+            wlogp = round(calc_wlogp(mol), 2)
 
-INPUT_TYPE = ""
+    if tpsa is not None and wlogp is not None:
+        mol_coords = Point(tpsa, wlogp)
+        return {
+            "Name": name,
+            "TPSA": tpsa,
+            "WLogP": wlogp,
+            "GIA": mol_coords.within(gia_ellipse),
+            "BBB": mol_coords.within(bbb_ellipse),
+        }
+    return None
 
-if not args.prefix:
-    # Prefix for output files:
-    prefix = input("Prefix to use for output files: ")
-else:
+
+def main():
+    argumentparser = argparse.ArgumentParser()
+    argumentparser.add_argument("--prefix", default="leads")
+    argumentparser.add_argument("--input-type", help="Input file type (sdf, csv)")
+    argumentparser.add_argument("--infile", nargs="+", required=True)
+    argumentparser.add_argument("--chunk-size", type=int, default=5000)
+    argumentparser.add_argument("--cpus", type=int, default=os.cpu_count())
+    argumentparser.add_argument(
+        "--compress", action="store_true", help="Compress output files using gzip"
+    )
+    args = argumentparser.parse_args()
+
+    gia_ellipse = Polygon(gia_coords)
+    bbb_ellipse = Polygon(bbb_coords)
+
     prefix = args.prefix
+    compression = "gzip" if args.compress else None
+    ext = ".csv.gz" if args.compress else ".csv"
 
-if args.infile and os.path.isfile(args.infile):
-    if args.input_type:
-        match str(args.input_type).lower():
-            case "csv":
-                INPUT_TYPE = "csv"
-            case "sdf":
-                INPUT_TYPE = "sdf"
-            case _:
-                print(
-                    "file type {} is not accepted check --help".format(args.input_type)
-                )
-    else:
-        print("Warning: --input-type is not set.")
+    work_dir = "work_boiled_egg"
+    os.makedirs(work_dir, exist_ok=True)
+    part_files = []
+    part_idx = 0
+    total_processed = 0
 
-    infile = args.infile
-else:
-    # Input of molecular structure data
-    infile = input("Name of SD or SwissADME CSV file: ")
+    print(f"Starting parallel BOILED Egg processing with {args.cpus} CPUs...")
 
-if INPUT_TYPE == "sdf" or infile.endswith(".sdf"):
-    suppl = Chem.SDMolSupplier(infile)
-    for mol in suppl:
-        if mol is None:
-            continue
-        name = mol.GetProp("compound") if mol.HasProp("compound") else "Unknown"
-        name = name.strip().replace(" ", "_").replace("-", "_")
+    with ProcessPoolExecutor(max_workers=args.cpus) as executor:
+        for infile in args.infile:
+            if not os.path.exists(infile):
+                continue
 
-        try:
-            # Calculate TPSA and WLogP
-            mol_tpsa = calc_tpsa(mol)
-            mol_tpsa = round(mol_tpsa, 2)
-            mol_wlogp = calc_wlogp(mol)
-            mol_wlogp = round(mol_wlogp, 2)
-
-            mol_coords = Point(mol_tpsa, mol_wlogp)
-            mol_gia = mol_coords.within(gia_ellipse)
-            mol_bbb = mol_coords.within(bbb_ellipse)
-
-            results.append(
-                {
-                    "Name": name,
-                    "TPSA": mol_tpsa,
-                    "WLogP": mol_wlogp,
-                    "GIA": mol_gia,
-                    "BBB": mol_bbb,
-                }
+            input_type = (
+                args.input_type
+                if args.input_type
+                else ("sdf" if infile.endswith(".sdf") else "csv")
             )
 
-        except:
-            # Write out name of failed structures
-            ferr = open("BOILED_egg_error.txt", "a")
-            ferr.write("{0}".format(name) + os.linesep)
-            ferr.close()
+            if input_type == "csv":
+                if os.path.getsize(infile) == 0:
+                    print(f"Warning: {infile} is empty. Skipping.")
+                    continue
+                for chunk in pd.read_csv(infile, chunksize=args.chunk_size):
+                    col_map = {
+                        "Molecule": "Name",
+                        "ligand:number": "Name",
+                        "Name": "Name",
+                        "TPSA": "TPSA",
+                        "psa": "TPSA",
+                        "WLOGP": "WLogP",
+                        "LogP": "WLogP",
+                        "WLogP": "WLogP",
+                    }
+                    available_cols = {
+                        col_map[c]: c for c in chunk.columns if c in col_map
+                    }
+                    if "Name" not in available_cols:
+                        chunk["Name"] = chunk.iloc[:, 0]
+                    else:
+                        chunk["Name"] = chunk[available_cols["Name"]]
 
-elif INPUT_TYPE == "csv" or infile.endswith(".csv"):
-    # Supports SwissADME's results
-    df_input = pd.read_csv(infile)
-    # Check if required columns exist
-    required_cols = ["Molecule", "TPSA", "WLOGP"]
-    if not all(col in df_input.columns for col in required_cols):
-        print(f"Error: CSV must contain columns: {required_cols}")
-        exit(1)
+                    # Parallel process chunk
+                    worker_func = partial(
+                        process_single_row,
+                        gia_ellipse=gia_ellipse,
+                        bbb_ellipse=bbb_ellipse,
+                        available_cols=available_cols,
+                    )
+                    results = list(executor.map(worker_func, chunk.iterrows()))
+                    chunk_results = [r for r in results if r is not None]
 
-    for index, row in df_input.iterrows():
-        name = str(row["Molecule"]).strip().replace(" ", "_").replace("-", "_")
-        mol_tpsa = clean_numeric(row["TPSA"])
-        mol_wlogp = clean_numeric(row["WLOGP"])
+                    if chunk_results:
+                        part_file = os.path.join(work_dir, f"part_{part_idx}.csv")
+                        pd.DataFrame(chunk_results).to_csv(part_file, index=False)
+                        part_files.append(part_file)
+                        total_processed += len(chunk_results)
+                        part_idx += 1
 
-        if mol_tpsa is None or mol_wlogp is None:
-            ferr = open("BOILED_egg_error.txt", "a")
-            ferr.write("{0} (Invalid numeric values)".format(name) + os.linesep)
-            ferr.close()
-            continue
+            elif input_type == "sdf":
+                suppl = Chem.SDMolSupplier(infile)
+                # SDF handling (convert to list for parallel processing)
+                batch = []
+                for mol in suppl:
+                    if mol:
+                        name = (
+                            mol.GetProp("compound")
+                            if mol.HasProp("compound")
+                            else "Unknown"
+                        )
+                        smi = Chem.MolToSmiles(mol)
+                        batch.append({"Name": name, "SMILES": smi})
 
-        mol_coords = Point(mol_tpsa, mol_wlogp)
-        mol_gia = mol_coords.within(gia_ellipse)
-        mol_bbb = mol_coords.within(bbb_ellipse)
+                    if len(batch) >= args.chunk_size:
+                        df_batch = pd.DataFrame(batch)
+                        worker_func = partial(
+                            process_single_row,
+                            gia_ellipse=gia_ellipse,
+                            bbb_ellipse=bbb_ellipse,
+                            available_cols={},
+                        )
+                        results = list(executor.map(worker_func, df_batch.iterrows()))
+                        chunk_results = [r for r in results if r is not None]
+                        if chunk_results:
+                            part_file = os.path.join(work_dir, f"part_{part_idx}.csv")
+                            pd.DataFrame(chunk_results).to_csv(part_file, index=False)
+                            part_files.append(part_file)
+                            total_processed += len(chunk_results)
+                            part_idx += 1
+                        batch = []
+                if batch:
+                    df_batch = pd.DataFrame(batch)
+                    results = list(executor.map(worker_func, df_batch.iterrows()))
+                    chunk_results = [r for r in results if r is not None]
+                    if chunk_results:
+                        part_file = os.path.join(work_dir, f"part_{part_idx}.csv")
+                        pd.DataFrame(chunk_results).to_csv(part_file, index=False)
+                        part_files.append(part_file)
+                        total_processed += len(chunk_results)
 
-        results.append(
-            {
-                "Name": name,
-                "TPSA": mol_tpsa,
-                "WLogP": mol_wlogp,
-                "GIA": mol_gia,
-                "BBB": mol_bbb,
-            }
-        )
+    # Merge
+    output_csv = "{}_BOILED_Egg{}".format(prefix, ext)
+    output_pdf = "{}_BOILED_Egg.pdf".format(prefix)
+    if part_files:
+        first = True
+        for part in part_files:
+            df_part = pd.read_csv(part)
+            df_part.to_csv(
+                output_csv, mode="a", index=False, header=first, compression=compression
+            )
+            first = False
+            os.remove(part)
+    else:
+        print("No data processed.")
+        with open(output_csv, 'w') as f:
+            pass
+        # Create a dummy PDF or just touch it
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_pdf import PdfPages
+        fig = Figure()
+        ax = fig.add_subplot(111)
+        ax.text(0.5, 0.5, "No ligands passed the filters.", ha='center', va='center')
+        fig.savefig(output_pdf)
+        return
 
-else:
-    print("Error: Unsupported file format. Use .sdf or .csv")
-    exit(1)
+    try:
+        os.rmdir(work_dir)
+    except:
+        pass
 
-# Create DataFrame from results
-df = pd.DataFrame(results, columns=["Name", "TPSA", "WLogP", "GIA", "BBB"])
+    df = pd.read_csv(output_csv)
+    gia = pd.DataFrame(gia_coords, columns=["tpsa", "wlogp"])
+    bbb = pd.DataFrame(bbb_coords, columns=["tpsa", "wlogp"])
 
-# Write CSV file containing calculated properties and
-# whether they are likely to be absorbed/BBB penetrating
-df.to_csv(
-    "{}_BOILED_Egg.csv".format(prefix), columns=["Name", "TPSA", "WLogP", "GIA", "BBB"]
-)
+    fig, ax = plt.subplots(1, 1)
+    df.plot(kind="scatter", x="TPSA", y="WLogP", zorder=3, ax=ax)
+    gia.plot(x="tpsa", y="wlogp", color="black", lw=2, zorder=1, ax=ax, label="GIA")
+    bbb.plot(x="tpsa", y="wlogp", color="yellow", lw=2, zorder=2, ax=ax, label="BBB")
+    plt.xlim(-20, 220)
+    plt.ylim(-3, 8)
+    plt.xlabel(r"TPSA / $\mathrm{\AA}^2$")
+    plt.ylabel("WLogP")
+    plt.title(
+        "BOILED-Egg\nPredicted G.I. absorption and blood-brain barrier penetration"
+    )
+    ax.set_facecolor((0.96, 0.96, 0.96))
+    plt.savefig("{}_BOILED_Egg.pdf".format(prefix))
+    print("Please cite\n\nDaina, A. & Zoete, V.,ChemMedChem 11, 1117–1121 (2016)")
 
-# Create BOILED-Egg plot
-fig, ax = plt.subplots(1, 1)
 
-df.plot(kind="scatter", x="TPSA", y="WLogP", zorder=3, ax=ax)
-
-gia.plot(x="tpsa", y="wlogp", color="black", lw=2, zorder=1, ax=ax, label="GIA")
-bbb.plot(x="tpsa", y="wlogp", color="yellow", lw=2, zorder=2, ax=ax, label="BBB")
-
-plt.xlim(-20, 220)
-plt.ylim(-3, 8)
-plt.xlabel(r"TPSA / $\mathrm{\AA}^2$")
-plt.ylabel("WLogP")
-plt.title("BOILED-Egg\nPredicted G.I. absorption and blood-brain barrier penetration")
-ax.set_facecolor((0.96, 0.96, 0.96))
-# plt.show()
-plt.savefig("{}_BOILED_Egg.pdf".format(prefix))
-
-print("Please cite\n")
-print("\n")
-print("Daina, A. & Zoete, V.,ChemMedChem 11, 1117–1121 (2016)")
+if __name__ == "__main__":
+    main()

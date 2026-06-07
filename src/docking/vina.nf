@@ -1,6 +1,6 @@
 process DOCKING {
     container 'quay.io/biocontainers/autodock-vina:1.1.2--2'
-    publishDir "${params.outdir}/${dir_name}", mode: 'copy'
+    publishDir "${params.outdir}/${params.prefix}_${dir_name}", mode: 'copy'
     cpus 1 // Since we are running per-ligand, 1 CPU per task is most efficient
 
     input:
@@ -13,7 +13,7 @@ process DOCKING {
     path "*.pdbqt"
 
     script:
-    def results_dir = file("${params.outdir}/${dir_name}").toAbsolutePath()
+    def results_dir = file("${params.outdir}/${params.prefix}_${dir_name}").toAbsolutePath()
     """
     cat > config.txt <<EOF
 # ligand
@@ -37,7 +37,7 @@ energy_range = ${config.energy_range}
 cpu = ${task.cpus}
 EOF
 
-    x_coords=\$(grep "^ATOM" ${ligand} | awk '{print \$6}' | sort -u)
+    x_coords=\$(grep -E "^(ATOM|HETATM)" ${ligand} | awk '{print \$6}' | sort -u)
 
     name=\$(grep "Name" ${ligand}| awk '{print \$4}' | head -1)
 

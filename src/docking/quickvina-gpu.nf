@@ -1,7 +1,7 @@
 process DOCKING_GPU {
     container 'ghcr.io/jsphu/docking_pipeline/quickvina-gpu:latest'
     containerOptions '--gpus all --env NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics --shm-size=4g'
-    publishDir "${params.outdir}/${dir_name}", mode: 'copy'
+    publishDir "${params.outdir}/${params.prefix}_${dir_name}", mode: 'copy'
 
     input:
     tuple val(dir_name), path("ligands/*")
@@ -9,13 +9,12 @@ process DOCKING_GPU {
     val config
 
     output:
-    path "results/*.pdbqt", emit: docked_files
+    path "*.pdbqt", emit: docked_files
 
     script:
     """
     set -euo pipefail
     ulimit -s unlimited
-    mkdir -p results
     #
     # Clean up ligands before running
     #find gpu_docking_job -type f -size 0 -delete
@@ -40,7 +39,7 @@ process DOCKING_GPU {
     QuickVina-W-GPU-2-1 \\
         --receptor ${receptor} \\
         --ligand_directory ligands/ \\
-        --output_directory results/ \\
+        --output_directory ./ \\
         --thread ${config.thread_size} \\
         --search_depth ${config.exhaustiveness} \\
         --center_x ${config.center_x} \\
