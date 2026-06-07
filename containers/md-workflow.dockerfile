@@ -74,10 +74,10 @@ RUN if [ -d "/usr/local/gromacs/avx2_256/bin" ]; then \
 WORKDIR /app
 
 # Copy the workflow scripts and source code
-COPY scripts/md_workflow/ /app/
+COPY md_workflow/ /app/
 
 # Make sure all scripts and entrypoint are executable
-RUN chmod +x /app/md_workflow.py /app/post_md.py /app/entrypoint.sh /app/run_smoke_test.sh
+RUN chmod +x /app/main.py /app/misc/entrypoint.sh /app/misc/run_smoke_test.sh
 
 # Default Environment Variables for Runtime
 ENV DATADIR=/app/data
@@ -96,4 +96,4 @@ RUN mkdir -p /workspace/results /workspace/work /app/data && cp /app/data/6NJS-1
 EXPOSE 8080
 
 # Entrypoint
-ENTRYPOINT ["/bin/bash", "/app/entrypoint.sh"]
+ENTRYPOINT ["/bin/bash", "/app/misc/entrypoint.sh"]

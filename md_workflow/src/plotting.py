@@ -1,6 +1,9 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from .logger_utils import setup_logger
+
+logger = setup_logger("plotting")
 
 def plot_xvg(file_path, output_path=None):
     """Plots an XVG file and optionally saves it. Handles multiple Y columns."""
@@ -11,7 +14,7 @@ def plot_xvg(file_path, output_path=None):
     ylabel = "Value"
 
     if not os.path.exists(file_path):
-        print(f"Warning: File {file_path} not found.")
+        logger.warning(f"File {file_path} not found.")
         return
 
     with open(file_path) as f:
@@ -42,7 +45,7 @@ def plot_xvg(file_path, output_path=None):
                     continue
 
     if not x:
-        print(f"Warning: No data found in {file_path}")
+        logger.warning(f"No data found in {file_path}")
         return
 
     plt.figure(figsize=(10, 6))

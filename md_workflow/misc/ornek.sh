@@ -57,7 +57,7 @@ echo -e "Harika, sanal ortamımız hazır. Şimdi scriptin bizden hangi argüman
 echo -e "beklediğini görmek için yardım komutuna göz atalım."
 echo ""
 echo -e "Normalde terminale şu komutu yazarak görebilirsiniz:"
-echo -e ">>  ${YELLOW}python3 md_workflow.py --help${NC}  <<"
+echo -e ">>  ${YELLOW}python3 main.py workflow --help${NC}  <<"
 echo -e "${BLUE}(Merak etmeyin, script bu çıktıyı sizin için aşağıya yazdıracaktır)${NC}"
 echo ""
 echo -e "${CYAN}-------------------------------------------------------------------${NC}"
@@ -70,7 +70,7 @@ echo -e "\n\n\n\n\n\n"
 
 # Help çıktısının simülasyonu
 cat <<'EOF'
-usage: md_workflow.py [-h] [--config CONFIG] [--protein PROTEIN [PROTEIN ...]]
+usage: main.py workflow [-h] [--config CONFIG] [--protein PROTEIN [PROTEIN ...]]
                       [--ligand LIGAND [LIGAND ...]] [--outdir OUTDIR]
                       [--workdir WORKDIR] [--gpu] [--no-gpu] [--docker]
                       [--no-docker] [--image IMAGE] [--skip-prep]
@@ -200,7 +200,7 @@ cat <<'EOF'
         //        | pdbs/
         //        --| protein.pdb
         //        --| ligand.pdbqt
-        //        | md_workflow.py
+        //        | main.py workflow
         //
         // Bu ağaç yapısında protein.pdb dosyası şu şekilde tanımlanır:
         //          "file": "pdbs/protein.pdb"
@@ -249,7 +249,7 @@ echo -e "\n\n\n\n\n\n"
 
 cat <<'EOF'
 ----------------------------------------------------------------
-KOMUT SATIRI ARGÜMANLARI (md_workflow.py)
+KOMUT SATIRI ARGÜMANLARI (main.py workflow)
 ----------------------------------------------------------------
 Terminalden doğrudan parametreler vererek iş akışını kontrol edebilirsiniz:
 
@@ -272,6 +272,6 @@ echo -e "\n\n\n\n\n\n"
 
 echo -e "${GREEN}Şimdilik bu kadar! İlk GPU destekli Docker simülasyonunuzu başlatmaya hazırsınız:${NC}"
 echo ""
-echo -e ">>  ${YELLOW}python3 md_workflow.py -c config.json -w work/ -o results --gpu --docker${NC}  <<"
+echo -e ">>  ${YELLOW}python3 main.py workflow -c config.json -w work/ -o results --gpu --docker${NC}  <<"
 echo ""
 echo -e "${GREEN}Her şey tamam! Yolunuz açık olsun!${NC}"

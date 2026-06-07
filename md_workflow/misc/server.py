@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Add project root to sys.path to ensure src can be imported
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -257,8 +263,11 @@ async def trigger_notify(message: str):
         return {"error": str(e)}
 
 
-if __name__ == "__main__":
+def main():
     import uvicorn
-
     port = int(os.environ.get("WEB_PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
+
+if __name__ == "__main__":
+    main()

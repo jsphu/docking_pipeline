@@ -10,7 +10,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 WORKDIR /app
 
 # Copy the workflow scripts and source code
-COPY scripts/md_workflow/ /app/
+COPY md_workflow/ /app/
 
 # Make sure all scripts and entrypoint are executable
 RUN chmod +x /app/run_native.sh

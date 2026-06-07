@@ -14,14 +14,14 @@ A professional-grade, fully automated suite for Protein-Ligand Molecular Dynamic
 
 ---
 
-## Usage: Running MD (`md_workflow.py`)
+## Usage: Running MD (`main.py workflow`)
 
 ### 1. Basic Run
 
 Processes all protein-ligand pairs defined in your configuration or provided via CLI.
 
 ```bash
-python3 md_workflow.py --protein prot.pdb --ligand lig_dir/ --outdir results
+python3 main.py workflow --protein prot.pdb --ligand lig_dir/ --outdir results
 ```
 
 ### 2. Skipping Preparation
@@ -29,7 +29,7 @@ python3 md_workflow.py --protein prot.pdb --ligand lig_dir/ --outdir results
 If you have already prepared your protein/ligand topologies and just want to run simulations:
 
 ```bash
-python3 md_workflow.py --skip-prep --outdir results
+python3 main.py workflow --skip-prep --outdir results
 ```
 
 ### 3. Smart Resume
@@ -37,7 +37,7 @@ python3 md_workflow.py --skip-prep --outdir results
 If a simulation was interrupted (e.g., cluster timeout), the system detects `.cpt` files and resumes automatically.
 
 ```bash
-python3 md_workflow.py --resume --outdir results
+python3 main.py workflow --resume --outdir results
 ```
 
 ### 4. Real-Time Notifications
@@ -46,21 +46,21 @@ Monitor your simulation progress (in nanoseconds) at a specific interval.
 
 ```bash
 # Notify every 30 minutes (1800 seconds)
-python3 md_workflow.py --notify-interval 1800
+python3 main.py workflow --notify-interval 1800
 ```
 
 *Note: See `NOTIFY_SYSTEM.md` for Email/Telegram setup.*
 
 ---
 
-## Usage: Post-MD Analysis (`post_md.py`)
+## Usage: Post-MD Analysis (`main.py post-md`)
 
 ### 1. Full Analysis
 
 Performs PBC correction, trajectory fitting, RMSD, RMSF, Rg, and Hydrogen Bond analysis for every completed complex.
 
 ```bash
-python3 post_md.py --outdir results
+python3 main.py post-md --outdir results
 ```
 
 ### 2. Selecting Specific Complexes
@@ -68,7 +68,7 @@ python3 post_md.py --outdir results
 Analyze only a subset of your results:
 
 ```bash
-python3 post_md.py --outdir results --select 6NJS_LIG1 6NJS_LIG2
+python3 main.py post-md --outdir results --select 6NJS_LIG1 6NJS_LIG2
 ```
 
 ### 3. Master Output Handling
@@ -76,7 +76,7 @@ python3 post_md.py --outdir results --select 6NJS_LIG1 6NJS_LIG2
 Generate a comparison report comparing all analyzed ligands without re-running GROMACS analysis:
 
 ```bash
-python3 post_md.py --outdir results --master-only --master-output final_comparison.html
+python3 main.py post-md --outdir results --master-only --master-output final_comparison.html
 ```
 
 ---
@@ -98,7 +98,7 @@ Export your token before running:
 
 ```bash
 export GITHUB_TOKEN="your_token"
-python3 md_workflow.py --upload
+python3 main.py post-md --upload
 ```
 
 ---
@@ -126,5 +126,5 @@ python3 md_workflow.py --upload
 
 ## Documentation
 
-- **`NOTIFY_SYSTEM.md`**: Detailed setup for Email, Telegram, and GitHub integration.
+- **`docs/NOTIFY_SYSTEM.md`**: Detailed setup for Email, Telegram, and GitHub integration.
 - **`config.json`**: Fine-tune GROMACS parameters (Temperature, Pressure, Nsteps, etc).

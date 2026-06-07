@@ -42,7 +42,7 @@ fi
 echo -e "\n\n\n\n\n\n"
 echo "Great, you have a conda environment, now lets look at"
 echo "our help to understand what is going on."
-echo "Type this ||    python3 md_workflow.py --help   ||"
+echo "Type this ||    python3 main.py workflow --help   ||"
 echo "(NOTE) The script will handle it, do not exit now."
 read -p "Type [y] to proceed. " -rsn1 isY
 if [[ ${isY,,} != "y" ]]; then
@@ -52,7 +52,7 @@ fi
 echo -e "\n\n\n\n\n\n"
 
 cat <<'EOF'
-usage: md_workflow.py [-h] [--config CONFIG] [--protein PROTEIN [PROTEIN ...]]
+usage: main.py workflow [-h] [--config CONFIG] [--protein PROTEIN [PROTEIN ...]]
                       [--ligand LIGAND [LIGAND ...]] [--outdir OUTDIR]
                       [--workdir WORKDIR] [--gpu] [--no-gpu] [--docker]
                       [--no-docker] [--image IMAGE] [--skip-prep]
@@ -170,7 +170,7 @@ cat <<'EOF'
         //        | pdbs/
         //        --| protein.pdb
         //          | ligand.smi
-        //        | md_workflow.py
+        //        | main.py workflow
         //        | src/
         //
         //    in this tree, protein.pdb can be found like this:
@@ -216,7 +216,7 @@ echo -e "\n\n\n\n\n\n"
 # Detailed educational breakdown starts here
 cat <<'EOF'
 ----------------------------------------------------------------
-CLI ARGUMENTS EXPLORATION (md_workflow.py)
+CLI ARGUMENTS EXPLORATION (main.py workflow)
 ----------------------------------------------------------------
 The script takes flags directly from your command terminal to control 
 how it executes your Molecular Dynamics jobs.
@@ -241,6 +241,6 @@ echo -e "\n\n\n\n\n\n"
 
 echo "That is all for now. you can start running your first GPU with docker pipeline:"
 echo ""
-echo "||  python3 md_workflow.py -c config.json -w work/ -o results --gpu --docker  ||"
+echo "||  python3 main.py workflow -c config.json -w work/ -o results --gpu --docker  ||"
 echo ""
 echo "That's all! you are good to go!"

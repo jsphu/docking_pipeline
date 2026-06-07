@@ -45,7 +45,7 @@ Add `--notify-interval [SECONDS]` to your command.
 
 ```bash
 # Example: Notify every 10 minutes (600 seconds)
-python3 md_workflow.py --protein prot.pdb --ligand lig.sdf --notify-interval 600
+python3 main.py workflow --protein prot.pdb --ligand lig.sdf --notify-interval 600
 ```
 
 ### Auto-Upload Results
@@ -53,7 +53,7 @@ python3 md_workflow.py --protein prot.pdb --ligand lig.sdf --notify-interval 600
 Add `--upload` to archive and transfer results automatically when finished.
 
 ```bash
-python3 md_workflow.py --protein prot.pdb --ligand lig.sdf --upload
+python3 main.py workflow --protein prot.pdb --ligand lig.sdf --upload
 ```
 
 ---
@@ -68,6 +68,7 @@ python3 md_workflow.py --protein prot.pdb --ligand lig.sdf --upload
 ---
 
 ## 4. Troubleshooting
+
 * **Email not arriving?** Ensure you used an "App Password" from Google, not your main password.
 * **Upload failing?** Ensure your `GITHUB_TOKEN` has `gist` permissions.
 * **No notifications?** The system only notifies during the **Production MD** stage (the longest part).

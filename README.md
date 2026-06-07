@@ -27,7 +27,7 @@ nextflow run main.nf --smiles_file data/sample_ligands.smi --receptor data/recep
 - **Automated Downloader:** Directly fetch ligands from ZINC or other URI links.
 - **Containerized:** Full support for Docker and Singularity, ensuring reproducibility and easy deployment.
 - **Post-Docking Suite:** Integrated scripts for filtering (Lipinski, PAINS), scoring, and lead collection.
-- **Automated MD:** One-command Molecular Dynamics workflow using GROMACS (via `md_workflow.py`).
+- **Automated MD:** One-command Molecular Dynamics workflow using GROMACS (via `md_workflow/main.py`).
 
 ## Installation & Setup
 
@@ -125,15 +125,14 @@ After docking, use the provided Python suite to filter and organize your results
 Perform automated GROMACS simulations for your top lead compounds:
 
 ```bash
-cd scripts/md_workflow
-python3 md_workflow.py \
+python3 md_workflow/main.py workflow \
   --protein protein.pdb \
   --ligand ligand.pdbqt \
   --config config.json \
   --docker
 ```
 
-*For more details, see the [MD Workflow documentation](scripts/md_workflow/README.md).*
+*For more details, see the [MD Workflow documentation](md_workflow/README.md).*
 
 ## License
 

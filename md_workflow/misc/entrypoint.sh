@@ -32,7 +32,7 @@ else
     fi
 
     # Run GROMACS test simulation
-    python3 /app/test_gpu.py || exit 1
+    python3 /app/misc/test_gpu.py || exit 1
   else
     echo "Skipping GPU test (USE_GPU=false)"
   fi
@@ -50,10 +50,10 @@ mkdir -p "$WORKDIR"
 
 # Start the web server in the background
 echo "--- Starting Web Server on port 8080 ---"
-python3 /app/server.py >/app/webserver.log 2>&1 &
+python3 /app/misc/server.py >/app/webserver.log 2>&1 &
 SERVER_PID=$!
 
-# Construct arguments for md_workflow.py
+# Construct arguments for main.py workflow
 # --no-docker is used because we ARE already inside docker
 CMD_ARGS="--config $CONFIG_FILE --outdir $OUTDIR --workdir $WORKDIR --no-docker"
 
@@ -90,7 +90,7 @@ fi
 if [ "$PREFLIGHT_CHECK" = "true" ]; then
   # Run the smoke test to ensure everything is perfect before main workflow
   echo "--- Running Pipeline Smoke Test ---"
-  /bin/bash /app/run_smoke_test.sh
+  /bin/bash /app/misc/run_smoke_test.sh
 else
   echo "Skipping smoke test (PREFLIGHT_CHECK=false)"
   echo "Only skip if you sure about the environment!"
@@ -98,14 +98,14 @@ fi
 
 # Main execution
 echo "--- Starting Main MD Workflow ---"
-python3 /app/md_workflow.py $CMD_ARGS
+python3 /app/main.py workflow $CMD_ARGS
 
 echo "--- Starting Post-MD Analysis ---"
 POST_ARGS="--outdir $OUTDIR --workdir $WORKDIR --config $CONFIG_FILE --no-docker"
 if [ "$UPLOAD_RESULTS" = "true" ]; then
   POST_ARGS="$POST_ARGS --upload"
 fi
-python3 /app/post_md.py $POST_ARGS
+python3 /app/main.py post-md $POST_ARGS
 
 echo "--- MD Workflow Completed ---"
 echo "Results are available in: $OUTDIR"
