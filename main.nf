@@ -39,6 +39,16 @@ def helpMessage() {
       --collate_size       [int]   Number of ligands to batch per GPU task. Default: ${params.collate_size}
       --thread_size        [int]   Thread size for GPU docking. Default: ${params.thread_size}
 
+    Molecular Dynamics:
+      --run_md             [bool]  Run GROMACS MD simulations on top docked complexes. Default: ${params.run_md}
+      --total_ligands      [int]   Simulate the top N ligands after filtering. Default: ${params.total_ligands}
+      --md_config          [path]  Path to MD simulation parameters JSON. Default: ${params.md_config}
+      --md_container       [str]   Docker image used for GROMACS execution. Default: ${params.md_container}
+      --md_conda           [path]  Conda environment definition for native execution. Default: ${params.md_conda}
+      --md_cpus            [int]   CPU threads to allocate per GROMACS simulation. Default: ${params.md_cpus}
+      --md_use_gpu         [bool]  Enable GPU acceleration in GROMACS. Default: ${params.md_use_gpu}
+      --md_steps           [int]   Production MD simulation steps limit (0 to use config). Default: ${params.md_steps}
+
     Other:
       --override           [bool]  Overwrite existing results in the output directory. Default: ${params.override}
       --help                       Show this message.
@@ -58,6 +68,7 @@ include { PREPARE_PROTEIN }             from './src/preparation/protein.nf'
 include { PREPARE_LIGANDS }             from './src/preparation/ligand.nf'
 include { SPLIT_INPUT }                 from './src/preparation/split.nf'
 include { COLLECT_RESULTS; EXTRACT_SMILES; FILTER_LIGANDS; PAINS_FILTER; BOILED_EGG; PREFILTER_SMILES } from './src/filtering/filtering.nf'
+include { SELECT_TOP_LIGANDS; PREPARE_MD_SYSTEM; MD_SIMULATION; POST_MD_ANALYSIS; PLOT_AND_REPORT; GENERATE_MASTER_REPORT } from './src/md_workflow/nextflow_md.nf'
 
 workflow {
     def docking_config = [ center_x: params.center_x, center_y: params.center_y, center_z: params.center_z, size_x: params.size_x, size_y: params.size_y, size_z: params.size_z, exhaustiveness: params.exhaustiveness, num_modes: params.num_modes, energy_range: params.energy_range, thread_size: params.thread_size ]
@@ -135,6 +146,7 @@ workflow {
     // Always collect scores regardless of filtering
     scores_csv_ch = COLLECT_RESULTS(docking_output_ch.collect())
 
+    def filter_csv_ch = scores_csv_ch
     if (params.run_filtering) {
         // Extract SMILES from the prepared ligands for property calculation
         smiles_csv_ch = EXTRACT_SMILES(ligands_ch.map{it[1]}.collect())
@@ -143,7 +155,50 @@ workflow {
 
         filtered_ch = FILTER_LIGANDS(smiles_csv_ch, scores_csv_ch, rules_toml)
         pains_free_ch = PAINS_FILTER(filtered_ch.csv)
-        BOILED_EGG(pains_free_ch.csv)
+        boiled_egg_ch = BOILED_EGG(pains_free_ch.csv)
+        filter_csv_ch = boiled_egg_ch.csv
+    }
+
+    if (params.run_md) {
+        // Select the top ligands (limited by params.total_ligands)
+        selected_pdbqts_ch = SELECT_TOP_LIGANDS(
+            filter_csv_ch,
+            scores_csv_ch,
+            docking_output_ch.collect(),
+            params.total_ligands
+        )
+        
+        md_config_file = file(params.md_config)
+
+        // 1. Prepare GROMACS structures and topologies (runs in Conda env)
+        prep_results_ch = PREPARE_MD_SYSTEM(
+            selected_pdbqts_ch.pdbqts.flatten(),
+            receptor_file_ch,
+            md_config_file
+        )
+
+        // 2. Run GROMACS simulations (runs in GROMACS container/GPU)
+        md_results_ch = MD_SIMULATION(
+            prep_results_ch.prep_dir
+        )
+
+        // 3. Perform GROMACS trajectory fitting and analysis (runs in GROMACS container/GPU)
+        analysis_data_ch = POST_MD_ANALYSIS(
+            md_results_ch.trajectory,
+            file("scripts/get_ligand_group.py")
+        )
+
+        // 4. Generate plots and individual HTML reports (runs in Conda env)
+        reports_ch = PLOT_AND_REPORT(
+            analysis_data_ch.analysis_data,
+            md_config_file
+        )
+
+        // 5. Generate master comparison report across all analyzed complexes (runs in Conda env)
+        GENERATE_MASTER_REPORT(
+            reports_ch.report_dir.collect(),
+            md_config_file
+        )
     }
 }
 
@@ -191,3 +246,13 @@ params.size_y           = 20.0
 params.size_z           = 20.0
 params.num_modes        = 9
 params.energy_range     = 3.0
+
+// --- MD Simulation parameters ---
+params.run_md           = false
+params.total_ligands    = 10
+params.md_config        = 'md_workflow/config.json'
+params.md_container     = 'nvcr.io/hpc/gromacs:2023.2'
+params.md_conda         = "${baseDir}/src/md_workflow/md_environment.yml"
+params.md_cpus          = 4
+params.md_use_gpu       = true
+params.md_steps         = 0 // 0 means use the step count in config.json

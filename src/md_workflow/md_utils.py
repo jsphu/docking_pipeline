@@ -1,0 +1,311 @@
+import os
+import logging
+import subprocess
+from .gmx_utils import run_gmx
+from .notify_utils import ProgressMonitor
+
+logger = logging.getLogger(__name__)
+
+
+def generate_mdp_files(cfg, outdir):
+    """Generates MDP files based on the provided configuration."""
+    temp = cfg["temperature"]
+    press = cfg["pressure"]
+
+    mdps = {
+        "em.mdp": f"""
+integrator      = steep
+emtol           = {cfg["em"]["emtol"]}
+emstep          = {cfg["em"]["emstep"]}
+nsteps          = {cfg["em"]["nsteps"]}
+nstlist         = 1
+cutoff-scheme   = {cfg["cutoff_scheme"]}
+coulombtype     = {cfg["coulombtype"]}
+rcoulomb        = {cfg["rcoulomb"]}
+rvdw            = {cfg["rvdw"]}
+pbc             = xyz
+""",
+        "nvt.mdp": f"""
+define                  = -DPOSRES
+integrator              = md
+nsteps                  = {cfg["nvt"]["nsteps"]}
+dt                      = {cfg["nvt"]["dt"]}
+nstxout                 = 500
+nstvout                 = 500
+nstenergy               = 500
+nstlog                  = 500
+continuation            = no
+constraint_algorithm    = {cfg["constraint_algorithm"]}
+constraints             = {cfg["constraints"]}
+lincs_iter              = {cfg["lincs_iter"]}
+lincs_order             = {cfg["lincs_order"]}
+cutoff-scheme           = {cfg["cutoff_scheme"]}
+nstlist                 = {cfg["nstlist"]}
+rcoulomb                = {cfg["rcoulomb"]}
+rvdw                    = {cfg["rvdw"]}
+DispCorr                = {cfg["disp_corr"]}
+coulombtype             = {cfg["coulombtype"]}
+pme_order               = {cfg["pme_order"]}
+fourierspacing          = {cfg["fourierspacing"]}
+tcoupl                  = {cfg["tcoupl"]}
+tc-grps                 = System
+tau_t                   = {cfg["nvt"]["tau_t"]}
+ref_t                   = {temp}
+pcoupl                  = no
+pbc                     = xyz
+Gen_vel                 = yes
+gen_temp                = {temp}
+gen_seed                = -1
+""",
+        "npt.mdp": f"""
+define                  = -DPOSRES
+integrator              = md
+nsteps                  = {cfg["npt"]["nsteps"]}
+dt                      = {cfg["npt"]["dt"]}
+nstxout                 = 500
+nstvout                 = 500
+nstenergy               = 500
+nstlog                  = 500
+continuation            = yes
+constraint_algorithm    = {cfg["constraint_algorithm"]}
+constraints             = {cfg["constraints"]}
+lincs_iter              = {cfg["lincs_iter"]}
+lincs_order             = {cfg["lincs_order"]}
+cutoff-scheme           = {cfg["cutoff_scheme"]}
+nstlist                 = {cfg["nstlist"]}
+rcoulomb                = {cfg["rcoulomb"]}
+rvdw                    = {cfg["rvdw"]}
+DispCorr                = {cfg["disp_corr"]}
+coulombtype             = {cfg["coulombtype"]}
+pme_order               = {cfg["pme_order"]}
+fourierspacing          = {cfg["fourierspacing"]}
+tcoupl                  = {cfg["tcoupl"]}
+tc-grps                 = System
+tau_t                   = {cfg["npt"]["tau_t"]}
+ref_t                   = {temp}
+pcoupl                  = {cfg["pcoupl"]}
+pcoupltype              = {cfg["pcoupltype"]}
+tau_p                   = {cfg["npt"]["tau_p"]}
+ref_p                   = {press}
+compressibility         = {cfg["compressibility"]}
+refcoord_scaling        = com
+pbc                     = xyz
+gen_vel                 = no
+""",
+        "md.mdp": f"""
+integrator              = md
+nsteps                  = {cfg["md"]["nsteps"]}
+dt                      = {cfg["md"]["dt"]}
+nstxout                 = {cfg["md"]["nstxout"]}
+nstvout                 = {cfg["md"]["nstvout"]}
+nstfout                 = {cfg["md"]["nstfout"]}
+nstxtcout               = {cfg["md"]["nstxtcout"]}
+nstenergy               = {cfg["md"]["nstenergy"]}
+nstlog                  = {cfg["md"]["nstlog"]}
+continuation            = yes
+constraint_algorithm    = {cfg["constraint_algorithm"]}
+constraints             = {cfg["constraints"]}
+lincs_iter              = {cfg["lincs_iter"]}
+lincs_order             = {cfg["lincs_order"]}
+cutoff-scheme           = {cfg["cutoff_scheme"]}
+nstlist                 = {cfg["nstlist"]}
+rcoulomb                = {cfg["rcoulomb"]}
+rvdw                    = {cfg["rvdw"]}
+DispCorr                = {cfg["disp_corr"]}
+coulombtype             = {cfg["coulombtype"]}
+pme_order               = {cfg["pme_order"]}
+fourierspacing          = {cfg["fourierspacing"]}
+tcoupl                  = {cfg["tcoupl"]}
+tc-grps                 = System
+tau_t                   = {cfg["md"]["tau_t"]}
+ref_t                   = {temp}
+pcoupl                  = {cfg["pcoupl"]}
+pcoupltype              = {cfg["pcoupltype"]}
+tau_p                   = {cfg["md"]["tau_p"]}
+ref_p                   = {press}
+compressibility         = {cfg["compressibility"]}
+pbc                     = xyz
+gen_vel                 = no
+""",
+    }
+    mdp_paths = {}
+    for name, content in mdps.items():
+        path = os.path.abspath(os.path.join(outdir, name))
+        with open(path, "w") as f:
+            f.write(content.strip())
+        mdp_paths[name] = path
+    logger.info(f"MDP files generated in {outdir}.")
+    return mdp_paths
+
+
+def concatenate_trajectories(output_prefix, outdir, use_docker=False, image=None, host_root=None, cpus=None):
+    """Concatenates all XTC parts found in outdir for a given prefix."""
+    import glob
+    
+    # GROMACS creates parts like complex_md.part0001.xtc when using -noappend
+    search_pattern = os.path.join(outdir, f"{output_prefix}_md*.xtc")
+    xtc_parts = sorted(glob.glob(search_pattern))
+    
+    if len(xtc_parts) <= 1:
+        logger.info(f"Only {len(xtc_parts)} trajectory part found. No concatenation needed.")
+        return
+        
+    logger.info(f"Found {len(xtc_parts)} trajectory parts for {output_prefix}. Concatenating...")
+    
+    final_xtc = os.path.abspath(os.path.join(outdir, f"{output_prefix}_md_combined.xtc"))
+    
+    # Prepare trjcat arguments
+    trjcat_args = ["trjcat", "-f"] + xtc_parts + ["-o", final_xtc]
+    
+    if run_gmx(
+        trjcat_args,
+        use_docker=use_docker,
+        image=image,
+        host_root=host_root,
+        cwd=outdir,
+        cpus=cpus
+    ):
+        logger.info(f"Successfully concatenated trajectories into {final_xtc}")
+        # Optionally, move the combined one to the main name
+        main_xtc = os.path.abspath(os.path.join(outdir, f"{output_prefix}_md.xtc"))
+        if os.path.exists(main_xtc):
+            backup_name = main_xtc + ".orig"
+            shutil.move(main_xtc, backup_name)
+        shutil.move(final_xtc, main_xtc)
+    else:
+        logger.error(f"Failed to concatenate trajectories for {output_prefix}")
+
+def run_step(
+    step_name,
+    mdp_path,
+    gro,
+    top,
+    output_prefix,
+    outdir,
+    workdir,
+    gpu=True,
+    prev_cpt=None,
+    use_docker=False,
+    image="nvcr.io/hpc/gromacs:2023.2",
+    host_root=None,
+    cpus=None,
+    notify_interval=None,
+    notifier=None,
+):
+    """Runs a single GROMACS step using direct gmx calls (supporting Docker)."""
+    target_dir = outdir if step_name == "md" else workdir
+    tpr = os.path.abspath(os.path.join(target_dir, f"{output_prefix}_{step_name}.tpr"))
+
+    grompp_args = ["grompp", "-maxwarn", "5"]
+    if step_name in ["nvt", "npt"]:
+        grompp_args.extend(["-r", gro])
+
+    grompp_input = {"-f": mdp_path, "-c": gro, "-p": top}
+    if prev_cpt:
+        grompp_input["-t"] = prev_cpt
+
+    if gro is None and os.path.exists(tpr):
+        logger.info(f"--- {step_name.upper()}: Using existing TPR file: {tpr} ---")
+    else:
+        if not run_gmx(
+            grompp_args,
+            input_files=grompp_input,
+            output_files={"-o": tpr},
+            use_docker=use_docker,
+            image=image,
+            host_root=host_root,
+            cwd=target_dir,
+            cpus=cpus,
+        ):
+            raise RuntimeError(f"grompp ({step_name}) failed")
+
+    md_out_base = f"{output_prefix}_{step_name}"
+    md_out_abs = os.path.abspath(os.path.join(target_dir, md_out_base))
+    cpt_file = f"{md_out_abs}.cpt"
+    log_file = f"{md_out_abs}.log"
+
+    # Optimization for single-node/single-GPU (e.g. Salad Cloud or WSL)
+    # -ntmpi 1: Single MPI rank is most stable for GPU offloading on a single node
+    # Detect available CPU cores
+    if cpus:
+        ntomp = str(cpus)
+    else:
+        cpu_count = os.cpu_count() or 4
+        ntomp = os.environ.get("SLURM_CPUS_PER_TASK", str(cpu_count))
+
+    md_args = [
+        "mdrun",
+        "-v",
+        "-deffnm",
+        md_out_abs,
+        "-ntmpi",
+        "1",
+        "-ntomp",
+        ntomp,
+        "-pin",
+        "on",
+    ]
+    md_input = {"-s": tpr}
+
+    # If production MD and checkpoint exists, resume
+    if step_name == "md" and os.path.exists(cpt_file):
+        logger.info(f"Existing checkpoint found for {step_name}. Resuming with -noappend...")
+        md_input["-cpi"] = cpt_file
+        md_args.append("-noappend")
+
+    # Detect GROMACS build type (OpenCL vs CUDA)
+    is_opencl = False
+    try:
+        # Check GROMACS version once
+        gmx_bin = os.environ.get("GMX_BIN", "gmx")
+        result = subprocess.run(
+            [gmx_bin, "mdrun", "-version"], capture_output=True, text=True
+        )
+        if "OpenCL" in result.stdout:
+            is_opencl = True
+            logger.info("Detected OpenCL GROMACS build.")
+        elif "CUDA" in result.stdout:
+            logger.info("Detected CUDA GROMACS build.")
+    except Exception:
+        pass
+
+    if gpu and step_name != "em":
+        # -nb gpu and -pme gpu provide the most significant speedup.
+        md_args.extend(["-nb", "gpu", "-pme", "gpu"])
+
+        if not is_opencl:
+            # For RunPod/High-end NVIDIA GPUs, we offload EVERYTHING to GPU.
+            # This requires -ntmpi 1 (which we set above).
+            md_args.extend(["-bonded", "gpu", "-update", "gpu"])
+        else:
+            # OpenCL doesn't support -update gpu yet in many GMX versions
+            md_args.extend(["-bonded", "cpu", "-update", "cpu"])
+    elif gpu and step_name == "em":
+        # EM on GPU is only supported for non-bonded in some GMX versions, 
+        # and often slower/unstable. We use GPU for NB if requested.
+        md_args.extend(["-nb", "gpu"])
+
+    # Start Progress Monitor if it's production MD and interval is set
+    monitor = None
+    if step_name == "md" and notify_interval and notifier:
+        monitor = ProgressMonitor(log_file, output_prefix, notify_interval, notifier)
+        monitor.start()
+
+    try:
+        if not run_gmx(
+            md_args,
+            input_files=md_input,
+            use_docker=use_docker,
+            image=image,
+            host_root=host_root,
+            cwd=target_dir,
+            cpus=cpus,
+        ):
+            # NO CPU FALLBACK as requested. Fail explicitly if GPU fails.
+            raise RuntimeError(f"mdrun ({step_name}) failed in GPU mode. Check logs for CUDA errors.")
+    finally:
+        if monitor:
+            monitor.stop()
+            monitor.join()
+
+    return os.path.abspath(f"{md_out_abs}.gro"), os.path.abspath(f"{md_out_abs}.cpt")

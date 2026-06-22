@@ -1,5 +1,5 @@
 process DOCKING_GPU {
-    container 'ghcr.io/jsphu/docking_pipeline/quickvina-gpu:latest'
+    container 'quickvina-gpu'
     containerOptions '--gpus all --env NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics --shm-size=4g'
     publishDir "${params.outdir}/${params.prefix}_${dir_name}", mode: 'copy'
 

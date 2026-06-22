@@ -1,0 +1,23 @@
+name: md_env
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.10
+  - gromacs
+  - openbabel
+  - ambertools
+  - rdkit
+  - biopython
+  - pandas
+  - numpy
+  - matplotlib
+  - scipy
+  - requests
+  - fastapi
+  - uvicorn
+  - pip
+  - pip:
+      - acpype
+      - parmed
